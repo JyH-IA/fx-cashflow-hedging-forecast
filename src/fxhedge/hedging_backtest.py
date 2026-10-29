@@ -28,6 +28,16 @@ Strategy = Literal["none", "fixed", "forecast"]
 STRATEGIES: tuple[Strategy, ...] = ("none", "fixed", "forecast")
 BASELINE_STRATEGY: Strategy = "none"
 REQUIRED_COLUMNS = ("date", "y_fx", "y_cash")
+RANDOM_WALK_NOTE = (
+    "**Warning:** no model forecasts were provided, so the `forecast` strategy uses the "
+    "random-walk expectation (spot at the origin). With a higher MXN than USD rate the "
+    "forward is always above the spot, so this strategy always hedges the high ratio and "
+    "behaves like a fixed hedge. Its results do not measure forecast skill."
+)
+
+
+def _days(count: int) -> pd.Timedelta:
+    return pd.Timedelta(count, unit="D")
 
 
 class HedgeConfig(BaseModel):
@@ -70,7 +80,7 @@ class StrategyComparison:
 
 def _month_origins(dates: pd.Series, horizon_days: int) -> list[pd.Timestamp]:
     first_per_month = dates.groupby([dates.dt.year, dates.dt.month]).min()
-    last_allowed = dates.max() - pd.Timedelta(days=horizon_days)
+    last_allowed = dates.max() - _days(horizon_days)
     return [pd.Timestamp(day) for day in first_per_month if day <= last_allowed]
 
 
@@ -113,7 +123,7 @@ def simulate_strategy(
         raise ValueError("Not enough data for a single hedging origin")
     rows: list[dict[str, object]] = []
     for origin in origins:
-        settle = origin + pd.Timedelta(days=cfg.horizon_days)
+        settle = origin + _days(cfg.horizon_days)
         window = data.loc[(data.index > origin) & (data.index <= settle), "y_cash"]
         exposure = float(window.sum())
         spot0 = float(data.loc[:origin, "y_fx"].iloc[-1])
@@ -198,8 +208,14 @@ def compare_strategies(
     return StrategyComparison(summary=pd.DataFrame(rows), n_boot=n_boot, block=block)
 
 
-def write_hedging_report(comparison: StrategyComparison, out_path: Path) -> None:
-    """Write the comparison as a Markdown report."""
+def write_hedging_report(
+    comparison: StrategyComparison, out_path: Path, forecast_note: str | None = None
+) -> None:
+    """Write the comparison as a Markdown report.
+
+    ``forecast_note`` is added under the title when the forecast strategy did not use
+    real model forecasts.
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     header = list(comparison.summary.columns)
     lines = ["| " + " | ".join(header) + " |", "| " + " | ".join("---" for _ in header) + " |"]
@@ -212,13 +228,19 @@ def write_hedging_report(comparison: StrategyComparison, out_path: Path) -> None
         "Illustrative simulation on synthetic cash flows and real or sample FX data.",
         "It is not an A/B test and not financial advice.",
         "",
-        *lines,
-        "",
-        f"Intervals: {comparison.n_boot} moving-block bootstrap resamples, "
-        f"block length {comparison.block} months (95 % percentile interval).",
-        "`var_reduction` is the fall in margin variance versus no hedge; "
-        "`mean_diff_mxn` is the average monthly margin change versus no hedge.",
     ]
+    if forecast_note is not None:
+        notes.extend([forecast_note, ""])
+    notes.extend(
+        [
+            *lines,
+            "",
+            f"Intervals: {comparison.n_boot} moving-block bootstrap resamples, "
+            f"block length {comparison.block} months (95 % percentile interval).",
+            "`var_reduction` is the fall in margin variance versus no hedge; "
+            "`mean_diff_mxn` is the average monthly margin change versus no hedge.",
+        ]
+    )
     out_path.write_text("\n".join(notes) + "\n", encoding="utf-8")
 
 
@@ -240,6 +262,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     business = load_yaml_model(settings.configs_dir / "business.yaml", BusinessConfig)
     cfg = HedgeConfig.from_business(business, args.horizon)
     master = read_csv_with_date(args.master)
+    used_random_walk = args.forecasts is None
     if args.forecasts is not None:
         table = read_csv_with_date(args.forecasts)
         forecasts = table.set_index("date")["fx_forecast"]
@@ -255,7 +278,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             forecasts = pd.Series(expected, index=origins)
         results[strategy] = simulate_strategy(master, strategy, cfg, forecasts)
     comparison = compare_strategies(results, args.n_boot, args.block, settings.seed)
-    write_hedging_report(comparison, args.out)
+    write_hedging_report(comparison, args.out, RANDOM_WALK_NOTE if used_random_walk else None)
     logger.info("Wrote %s", args.out)
     return 0
 

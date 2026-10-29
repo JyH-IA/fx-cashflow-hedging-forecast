@@ -1,4 +1,4 @@
-.PHONY: setup format lint typecheck test sample demo db-up ingest features train evaluate hedge explain monitor retrain app api openapi docker-build
+.PHONY: setup format lint typecheck test sample demo db-up ingest features train evaluate evaluate-full hedge explain monitor retrain app api openapi docker-build
 
 PYTHON ?= python
 
@@ -42,6 +42,10 @@ train:
 
 evaluate:
 	$(PYTHON) -m fxhedge.evaluation
+
+# Also backtests the hybrid, XGBoost and SARIMA. Refits per fold, so it is slow.
+evaluate-full:
+	$(PYTHON) -m fxhedge.evaluation --with-models --with-sarima
 
 hedge:
 	$(PYTHON) -m fxhedge.hedging_backtest
