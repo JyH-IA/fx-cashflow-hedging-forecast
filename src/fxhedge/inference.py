@@ -87,7 +87,8 @@ def log_change_samples(
     if len(recent) <= horizon + 10 or bool((recent <= 0.0).any()):
         raise ValueError("Need more positive history to estimate prediction intervals")
     changes = np.log(recent.shift(-horizon) / recent).dropna().to_numpy(dtype=np.float64)
-    return changes - float(np.median(changes))
+    centered: NDArray[np.float64] = changes - float(np.median(changes))
+    return centered
 
 
 def interval_bounds(

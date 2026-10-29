@@ -187,7 +187,8 @@ def oos_residuals(series: pd.Series, fit_base: BaseFitter, cfg: TrainingConfig) 
         predicted = base.predict(test_dates)
         actual = series.iloc[test_index].to_numpy(dtype=np.float64)
         parts.append(pd.Series(actual - predicted, index=test_dates))
-    return pd.concat(parts)
+    combined: pd.Series = pd.concat(parts)
+    return combined
 
 
 def cv_rmse(
@@ -216,9 +217,14 @@ def build_lightgbm(params: Mapping[str, float | int], seed: int) -> Any:
     """Create an unfitted ``LGBMRegressor`` with the given hyperparameters."""
     import lightgbm as lgb
 
-    return lgb.LGBMRegressor(
-        **params, subsample_freq=1, random_state=seed, n_jobs=1, verbose=-1
-    )
+    estimator_params: dict[str, Any] = {
+        **params,
+        "subsample_freq": 1,
+        "random_state": seed,
+        "n_jobs": 1,
+        "verbose": -1,
+    }
+    return lgb.LGBMRegressor(**estimator_params)
 
 
 def suggest_lightgbm_params(trial: Any) -> Params:

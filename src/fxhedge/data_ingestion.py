@@ -158,7 +158,8 @@ def fetch_banxico_series(
     long["date"] = pd.to_datetime(long["date"])
     wide = long.pivot_table(index="date", columns="series_id", values="value", aggfunc="last")
     wide.columns.name = None
-    return wide.reset_index()
+    flattened: pd.DataFrame = wide.reset_index()
+    return flattened
 
 
 def fetch_yahoo_fx(ticker: str, start: date, end: date) -> pd.DataFrame:

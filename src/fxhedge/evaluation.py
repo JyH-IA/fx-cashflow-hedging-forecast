@@ -119,7 +119,8 @@ def sarima_forecast(
     fitted = SARIMAX(daily, order=order, seasonal_order=seasonal_order).fit(disp=False)
     forecast = fitted.get_forecast(steps=horizon).predicted_mean
     forecast.index = _future_index(daily, horizon)
-    return forecast.astype(float)
+    result: pd.Series = forecast.astype(float)
+    return result
 
 
 def make_sarima_forecaster(
