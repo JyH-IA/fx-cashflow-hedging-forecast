@@ -12,6 +12,7 @@ import json
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -20,6 +21,9 @@ from pydantic import BaseModel, ConfigDict
 from fxhedge.config import TrainingConfig, load_settings, load_yaml_model
 from fxhedge.io_utils import read_csv_with_date
 
+if TYPE_CHECKING:
+    from fxhedge.model_training import Target
+
 logger = logging.getLogger(__name__)
 
 Forecaster = Callable[[pd.Series, int], pd.Series]
@@ -27,6 +31,7 @@ Forecaster = Callable[[pd.Series, int], pd.Series]
 SEASONAL_PERIODS: dict[str, int] = {"y_fx": 7, "y_cash": 365}
 BASELINE_MODEL = "random_walk"
 MIN_TRAIN_ROWS = 365
+ONE_DAY = pd.Timedelta(1, unit="D")
 _METRIC_COLUMNS = ("mape", "rmse", "mae")
 
 
@@ -80,7 +85,7 @@ def interval_coverage(y_true: pd.Series, lower: pd.Series, upper: pd.Series) -> 
 
 def _future_index(train: pd.Series, horizon: int) -> pd.DatetimeIndex:
     last = pd.Timestamp(train.index[-1])
-    return pd.date_range(last + pd.Timedelta(days=1), periods=horizon, freq="D")
+    return pd.date_range(last + ONE_DAY, periods=horizon, freq="D")
 
 
 def random_walk_forecaster(train: pd.Series, horizon: int) -> pd.Series:
@@ -142,6 +147,22 @@ def default_forecasters(target: str) -> dict[str, Forecaster]:
     return {
         BASELINE_MODEL: random_walk_forecaster,
         f"seasonal_naive_{period}": make_seasonal_naive(period),
+    }
+
+
+def model_forecasters(
+    master: pd.DataFrame, target: Target, cfg: TrainingConfig
+) -> dict[str, Forecaster]:
+    """Forecasters for the trained model families: Prophet+LightGBM hybrid and XGBoost.
+
+    Each forecaster refits on every backtest fold, so this is slow. The import is local
+    because ``model_training`` imports this module.
+    """
+    from fxhedge.model_training import make_model_forecaster
+
+    return {
+        "hybrid": make_model_forecaster(master, target, cfg, "hybrid"),
+        "xgboost": make_model_forecaster(master, target, cfg, "xgboost"),
     }
 
 
@@ -260,7 +281,7 @@ def write_report(summary: pd.DataFrame, out_dir: Path) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Command-line entry point: backtest baselines (optionally SARIMA) and write reports."""
+    """Command-line entry point: backtest baselines (optionally models and SARIMA)."""
     settings = load_settings()
     parser = argparse.ArgumentParser(description="Backtest baselines and write reports.")
     parser.add_argument(
@@ -268,16 +289,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--out", type=Path, default=Path("reports"))
     parser.add_argument("--with-sarima", action="store_true", help="Also backtest SARIMA (slow).")
+    parser.add_argument(
+        "--with-models",
+        action="store_true",
+        help="Also backtest the Prophet+LightGBM hybrid and XGBoost (refits per fold; slow).",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     cfg = load_yaml_model(settings.configs_dir / "training.yaml", TrainingConfig)
     master = read_csv_with_date(args.master)
+    targets: tuple[Target, ...] = ("y_fx", "y_cash")
     frames: list[pd.DataFrame] = []
-    for target in ("y_fx", "y_cash"):
+    for target in targets:
         models = default_forecasters(target)
         if args.with_sarima:
             models["sarima"] = make_sarima_forecaster()
+        if args.with_models:
+            logger.info("Backtesting trained models for %s (this can take a while)", target)
+            models.update(model_forecasters(master, target, cfg))
         frames.append(backtest(master, target, cfg.horizons, cfg, models))
     summary = summarize_backtest(pd.concat(frames, ignore_index=True))
     write_report(summary, args.out)
