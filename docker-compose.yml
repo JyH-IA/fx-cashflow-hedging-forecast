@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    profiles: ["oracle"]
+    environment:
+      # Only needed with: docker compose --profile oracle up -d
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-}
+    ports:
+      - "127.0.0.1:1521:1521"
+    volumes:
+      - oracledata:/opt/oracle/oradata
+
+  # Start with: docker compose --profile app up --build
+  # Train the models first (make demo) so that ./models and ./data/processed exist.
+  app:
+    build: .
+    image: fxhedge:local
+    profiles: ["app"]
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "127.0.0.1:8501:8501"
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data:ro
+
+  api:
+    build: .
+    image: fxhedge:local
+    profiles: ["app"]
+    command: ["uvicorn", "fxhedge.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:
+  oracledata:
