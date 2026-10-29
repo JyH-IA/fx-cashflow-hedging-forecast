@@ -1,0 +1,4 @@
+psi_bins: 10
+psi_threshold: 0.2
+rolling_window: 30
+error_ratio_threshold: 1.5

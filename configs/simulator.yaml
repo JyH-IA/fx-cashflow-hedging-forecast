@@ -1,0 +1,8 @@
+start: 2020-01-01
+end: 2026-09-30
+base_daily_sales_usd: 250000.0
+annual_growth: 0.04
+seasonality_amplitude: 0.25
+hurricane_penalty: 0.12
+noise_std_pct: 0.05
+cash_conversion_ratio: 0.35

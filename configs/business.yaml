@@ -1,0 +1,7 @@
+# Illustrative assumptions. These are NOT real company figures.
+mxn_cost_share: 0.82
+fixed_hedge_ratio: 0.5
+bank_spread_bps: 15.0
+fixed_fee_usd: 25.0
+rate_mxn_pct: 10.0
+rate_usd_pct: 4.5

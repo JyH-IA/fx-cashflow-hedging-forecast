@@ -1,0 +1,8 @@
+horizons: [30, 60, 90]
+n_splits: 5
+gap: 90
+optuna_trials: 30
+seed: 42
+lags: [7, 14, 30]
+windows: [7, 14, 30]
+interval_level: 0.95

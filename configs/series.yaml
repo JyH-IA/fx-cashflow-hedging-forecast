@@ -1,0 +1,7 @@
+# TODO(verify): confirm every identifier against the provider documentation before use.
+banxico:
+  usdmxn_fix: SF43718   # TODO(verify): FIX exchange rate (Banxico SIE)
+  cetes_28d: SF43783    # TODO(verify): 28-day CETES rate (Banxico SIE)
+  inpc: SP1             # TODO(verify): national consumer price index (Banxico SIE)
+yahoo_ticker: MXN=X
+fed_funds_fred_id: DFF  # TODO(verify): effective federal funds rate (FRED)
