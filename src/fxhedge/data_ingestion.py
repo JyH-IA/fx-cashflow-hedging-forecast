@@ -286,10 +286,10 @@ def build_macro_dataset(
 
 
 def _store_sales_in_db(settings: Settings, sales: pd.DataFrame) -> None:
-    from fxhedge.db import apply_schema, insert_sales, make_engine
-
     if settings.db_url is None:
         return
+    from fxhedge.db import apply_schema, insert_sales, make_engine
+
     engine = make_engine(settings.db_url)
     apply_schema(engine, Path("sql/01_schema.sql"))
     inserted = insert_sales(engine, sales)
