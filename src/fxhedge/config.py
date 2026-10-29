@@ -67,7 +67,13 @@ class SimulatorConfig(_FrozenModel):
 
 
 class TrainingConfig(_FrozenModel):
-    """Training, validation and feature settings."""
+    """Training, validation and feature settings.
+
+    The ``residual_*`` fields control the out-of-sample residuals that the hybrid's tree
+    model learns from. With enough rows, the residuals come from blocks of
+    ``residual_test_size`` days, close to the forecast horizon. With fewer rows than
+    ``residual_min_splits`` such blocks, the older split by ``n_splits`` is used.
+    """
 
     horizons: list[int] = Field(default_factory=lambda: [30, 60, 90])
     n_splits: int = Field(5, ge=2)
@@ -77,6 +83,10 @@ class TrainingConfig(_FrozenModel):
     lags: list[int] = Field(default_factory=lambda: [7, 14, 30])
     windows: list[int] = Field(default_factory=lambda: [7, 14, 30])
     interval_level: float = Field(0.95, gt=0.5, lt=1.0)
+    residual_test_size: int = Field(90, ge=1)
+    residual_min_train: int = Field(365, ge=30)
+    residual_min_splits: int = Field(7, ge=2)
+    residual_max_splits: int = Field(12, ge=2)
 
 
 class MonitoringConfig(_FrozenModel):
