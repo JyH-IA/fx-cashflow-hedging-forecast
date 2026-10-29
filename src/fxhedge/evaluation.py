@@ -31,6 +31,7 @@ Forecaster = Callable[[pd.Series, int], pd.Series]
 SEASONAL_PERIODS: dict[str, int] = {"y_fx": 7, "y_cash": 365}
 BASELINE_MODEL = "random_walk"
 MIN_TRAIN_ROWS = 365
+MODEL_MIN_TRAIN_ROWS = 1095
 ONE_DAY = pd.Timedelta(1, unit="D")
 _METRIC_COLUMNS = ("mape", "rmse", "mae")
 
@@ -166,6 +167,23 @@ def model_forecasters(
     }
 
 
+def resolve_min_train(requested: int | None, with_models: bool) -> int:
+    """Pick the size of the first training window of the backtest.
+
+    The hybrid builds out-of-sample residuals with an expanding split that skips ``gap``
+    rows, so it needs a longer first window than the baselines. All models in one run share
+    the same folds, which keeps the comparison fair.
+
+    Raises:
+        ValueError: if ``requested`` is not positive.
+    """
+    if requested is not None:
+        if requested < 1:
+            raise ValueError("min_train must be positive")
+        return requested
+    return MODEL_MIN_TRAIN_ROWS if with_models else MIN_TRAIN_ROWS
+
+
 def baseline_forecasts(df: pd.DataFrame, target: str, horizon: int) -> pd.DataFrame:
     """Forecast ``horizon`` days after the last row with each baseline.
 
@@ -294,11 +312,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Also backtest the Prophet+LightGBM hybrid and XGBoost (refits per fold; slow).",
     )
+    parser.add_argument(
+        "--min-train",
+        type=int,
+        default=None,
+        help=(
+            f"Rows in the first training window (default {MIN_TRAIN_ROWS}, "
+            f"or {MODEL_MIN_TRAIN_ROWS} with --with-models)."
+        ),
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     cfg = load_yaml_model(settings.configs_dir / "training.yaml", TrainingConfig)
     master = read_csv_with_date(args.master)
+    min_train = resolve_min_train(args.min_train, args.with_models)
     targets: tuple[Target, ...] = ("y_fx", "y_cash")
     frames: list[pd.DataFrame] = []
     for target in targets:
@@ -308,7 +336,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.with_models:
             logger.info("Backtesting trained models for %s (this can take a while)", target)
             models.update(model_forecasters(master, target, cfg))
-        frames.append(backtest(master, target, cfg.horizons, cfg, models))
+        frames.append(backtest(master, target, cfg.horizons, cfg, models, min_train))
     summary = summarize_backtest(pd.concat(frames, ignore_index=True))
     write_report(summary, args.out)
     logger.info("Wrote reports to %s", args.out)

@@ -6,13 +6,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from fxhedge.config import TrainingConfig
 from fxhedge.evaluation import (
     BASELINE_MODEL,
+    MIN_TRAIN_ROWS,
+    MODEL_MIN_TRAIN_ROWS,
     backtest,
     model_forecasters,
     random_walk_forecaster,
+    resolve_min_train,
     summarize_backtest,
 )
 from fxhedge.feature_engineering import add_calendar_features
@@ -23,7 +27,7 @@ from fxhedge.hedging_backtest import (
     simulate_strategy,
     write_hedging_report,
 )
-from fxhedge.model_training import BaseForecaster, Predictor
+from fxhedge.model_training import BaseForecaster, Predictor, fit_hybrid
 
 CFG = TrainingConfig(n_splits=2, gap=5, optuna_trials=1)
 HEDGE_CFG = HedgeConfig(
@@ -99,6 +103,21 @@ def test_backtest_reports_a_model_forecaster_next_to_the_baseline() -> None:
     assert set(summary["model"]) == {BASELINE_MODEL, "hybrid"}
     assert np.isfinite(summary["rmse"].to_numpy()).all()
     assert np.isfinite(summary["rmse_vs_random_walk"].to_numpy()).all()
+
+
+def test_resolve_min_train_defaults_and_validation() -> None:
+    assert resolve_min_train(None, False) == MIN_TRAIN_ROWS
+    assert resolve_min_train(None, True) == MODEL_MIN_TRAIN_ROWS
+    assert resolve_min_train(500, True) == 500
+    with pytest.raises(ValueError):
+        resolve_min_train(0, False)
+
+
+def test_hybrid_needs_a_longer_first_window_than_the_baselines() -> None:
+    cfg = TrainingConfig(n_splits=5, gap=90, optuna_trials=1)
+    fit_hybrid(_model_frame(MODEL_MIN_TRAIN_ROWS), "y_fx", cfg, fit_mean_base, fit_zero_tree)
+    with pytest.raises(ValueError):
+        fit_hybrid(_model_frame(MIN_TRAIN_ROWS), "y_fx", cfg, fit_mean_base, fit_zero_tree)
 
 
 def test_hedging_report_shows_the_random_walk_note_only_when_given(tmp_path: Path) -> None:
