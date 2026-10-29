@@ -26,6 +26,40 @@ services:
     volumes:
       - oracledata:/opt/oracle/oradata
 
+  # Start with: docker compose --profile app up --build
+  # Train the models first (make demo) so that ./models and ./data/processed exist.
+  app:
+    build: .
+    image: fxhedge:local
+    profiles: ["app"]
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "127.0.0.1:8501:8501"
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data:ro
+
+  api:
+    build: .
+    image: fxhedge:local
+    profiles: ["app"]
+    command: ["uvicorn", "fxhedge.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   pgdata:
   oracledata:

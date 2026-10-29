@@ -1,4 +1,4 @@
-.PHONY: setup lint typecheck test db-up ingest features train evaluate hedge explain monitor retrain app api docker-build
+.PHONY: setup format lint typecheck test sample demo db-up ingest features train evaluate hedge explain monitor retrain app api openapi docker-build
 
 PYTHON ?= python
 
@@ -7,9 +7,12 @@ setup:
 	$(PYTHON) -m pip install -e ".[dev]"
 	pre-commit install
 
+format:
+	ruff format .
+	ruff check --fix .
+
 lint:
 	ruff check .
-	ruff format --check .
 
 typecheck:
 	mypy src
@@ -17,9 +20,17 @@ typecheck:
 test:
 	pytest
 
+# Fully synthetic data, no token needed (the exchange-rate series is NOT real market data).
+sample:
+	$(PYTHON) -m fxhedge.sample_data
+
+# End-to-end demo on synthetic data.
+demo: sample features train evaluate hedge
+
 db-up:
 	docker compose up -d postgres
 
+# Real macro data; needs BANXICO_TOKEN in .env.
 ingest:
 	$(PYTHON) -m fxhedge.data_ingestion
 
@@ -49,6 +60,9 @@ app:
 
 api:
 	uvicorn fxhedge.api:app --host 127.0.0.1 --port 8000
+
+openapi:
+	$(PYTHON) -m fxhedge.api --export-openapi docs/openapi.json
 
 docker-build:
 	docker build -t fxhedge:local .
