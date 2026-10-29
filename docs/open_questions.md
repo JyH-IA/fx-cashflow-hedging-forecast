@@ -2,13 +2,13 @@
 
 Items marked `TODO(verify)` in the code and configuration, plus known gaps.
 
-## Status after the first CI run (2026-10-29)
+## Status after the first CI runs (2026-10-29)
 
-- 158 of 160 tests passed with 84.8 % coverage. The two failures were a real bug: `:name` tokens inside SQL comments were treated as bind parameters. The comments were fixed and `tests/test_sql_files.py` guards against it.
+- All six CI jobs pass: lint, `mypy --strict`, tests (160+ tests, about 85 % coverage), secret scan, dependency audit and the Docker build.
 - Real LightGBM and Optuna tuning, the FastAPI app, the Streamlit smoke test and the SQLite tests ran in CI.
-- `ruff` found three style issues (a long line, a hardcoded-password false positive in a test and a nested `with`), now fixed.
-- The Trivy action version was invalid and the step was removed; the Docker build job now only builds the image.
-- `pip-audit` reported vulnerabilities in the `setuptools` build tool of the runner, not in project dependencies; CI now upgrades it.
+- The first run found a real bug: `:name` tokens inside SQL comments were treated as bind parameters by SQLAlchemy. It is fixed and `tests/test_sql_files.py` guards against it.
+- The Trivy action version used at first did not exist, so the image scan step was removed.
+- `mypy --strict` is now a blocking job.
 
 ## External identifiers and APIs
 
@@ -21,13 +21,13 @@ Items marked `TODO(verify)` in the code and configuration, plus known gaps.
 - Real Prophet fitting and its JSON serialization (tests use a lightweight stand-in).
 - Real XGBoost training and JSON artifacts, and saving/loading real LightGBM artifacts.
 - SHAP `TreeExplainer` on a loaded booster.
-- The Docker image build (the job now runs for the first time).
+- The full `make demo` pipeline on a developer machine.
 
 ## Tooling
 
 - Docker base images are not pinned by digest.
-- `mypy --strict` reports about 30 errors in five modules; it stays advisory until they are fixed.
 - A container image scan (for example Trivy) is not configured; add it once the action version can be verified.
+- The dependency audit stays advisory because new advisories can appear at any time.
 - The coverage gate is 80 %.
 - `starlette.testclient` warns that `httpx` is deprecated in favour of a newer package; revisit when upgrading FastAPI.
 

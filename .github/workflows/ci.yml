@@ -24,9 +24,7 @@ jobs:
       - run: ruff check .
 
   typecheck:
-    # Advisory until the strict run has been cleaned up; then remove continue-on-error.
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
