@@ -178,7 +178,7 @@ def fetch_yahoo_fx(ticker: str, start: date, end: date) -> pd.DataFrame:
     close = data["Close"]
     if isinstance(close, pd.DataFrame):
         close = close.iloc[:, 0]
-    frame = close.rename("usdmxn_yf").reset_index()
+    frame: pd.DataFrame = close.rename("usdmxn_yf").reset_index()
     frame.columns = ["date", "usdmxn_yf"]
     frame["date"] = pd.to_datetime(frame["date"]).dt.tz_localize(None)
     frame["usdmxn_yf"] = frame["usdmxn_yf"].astype(float)
