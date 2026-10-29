@@ -16,7 +16,9 @@ _INSERT_SALES_SQL = (
     "INSERT INTO sales_daily (sale_date, occupancy_rate, sales_usd, cash_in_usd) "
     "VALUES (:sale_date, :occupancy_rate, :sales_usd, :cash_in_usd)"
 )
-_DELETE_RANGE_SQL = "DELETE FROM sales_daily WHERE sale_date >= :start_date AND sale_date <= :end_date"
+_DELETE_RANGE_SQL = (
+    "DELETE FROM sales_daily WHERE sale_date >= :start_date AND sale_date <= :end_date"
+)
 
 
 def make_engine(db_url: SecretStr) -> Engine:
@@ -25,7 +27,10 @@ def make_engine(db_url: SecretStr) -> Engine:
 
 
 def read_sql_file(path: Path) -> str:
-    """Read a versioned SQL file as text."""
+    """Read a versioned SQL file as text.
+
+    Keep ``:name`` tokens out of SQL comments: SQLAlchemy ``text()`` treats them as binds.
+    """
     return path.read_text(encoding="utf-8")
 
 
@@ -61,14 +66,21 @@ def insert_sales(engine: Engine, frame: pd.DataFrame) -> int:
         DataContractError: if ``frame`` does not satisfy the sales contract.
     """
     validate_frame(frame, SALES_SPEC)
+    days = pd.DatetimeIndex(frame["date"]).date
     records = [
         {
-            "sale_date": row.date.date(),
-            "occupancy_rate": float(row.occupancy_rate),
-            "sales_usd": float(row.sales_usd),
-            "cash_in_usd": float(row.cash_in_usd),
+            "sale_date": day,
+            "occupancy_rate": float(occupancy),
+            "sales_usd": float(sales),
+            "cash_in_usd": float(cash_in),
         }
-        for row in frame.itertuples(index=False)
+        for day, occupancy, sales, cash_in in zip(
+            days,
+            frame["occupancy_rate"],
+            frame["sales_usd"],
+            frame["cash_in_usd"],
+            strict=True,
+        )
     ]
     if not records:
         return 0
@@ -77,10 +89,6 @@ def insert_sales(engine: Engine, frame: pd.DataFrame) -> int:
     )
     insert_stmt = text(_INSERT_SALES_SQL).bindparams(bindparam("sale_date", type_=Date))
     with engine.begin() as conn:
-        conn.execute(
-            delete_stmt,
-            {"start_date": min(r["sale_date"] for r in records),
-             "end_date": max(r["sale_date"] for r in records)},
-        )
+        conn.execute(delete_stmt, {"start_date": min(days), "end_date": max(days)})
         conn.execute(insert_stmt, records)
     return len(records)

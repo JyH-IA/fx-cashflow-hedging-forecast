@@ -64,8 +64,6 @@ def test_invalid_frames_are_rejected_before_insert(engine: Engine) -> None:
 
 
 def test_database_constraints_reject_bad_rows(engine: Engine) -> None:
-    with pytest.raises(Exception, match="(?i)check|constraint"):
-        with engine.begin() as connection:
-            connection.exec_driver_sql(
-                "INSERT INTO sales_daily VALUES ('2024-01-01', 1.5, 1.0, 1.0)"
-            )
+    insert = "INSERT INTO sales_daily VALUES ('2024-01-01', 1.5, 1.0, 1.0)"
+    with pytest.raises(Exception, match="(?i)check|constraint"), engine.begin() as connection:
+        connection.exec_driver_sql(insert)

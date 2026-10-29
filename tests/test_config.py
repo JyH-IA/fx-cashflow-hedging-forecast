@@ -39,7 +39,7 @@ def test_business_assumptions_match_the_documented_scenario(repo_root: Path) -> 
 
 def test_secrets_are_optional_and_hidden() -> None:
     assert Settings(_env_file=None).banxico_token is None
-    settings = Settings(_env_file=None, banxico_token="top-secret-value")
+    settings = Settings(_env_file=None, banxico_token="top-secret-value")  # noqa: S106
     assert "top-secret-value" not in repr(settings)
     assert "top-secret-value" not in str(settings)
 

@@ -1,5 +1,5 @@
 -- Monthly cash-in totals (PostgreSQL and Oracle; SQLite has no EXTRACT).
--- Parameters: :start_date, :end_date.
+-- The dates are bound as start_date and end_date.
 SELECT
     EXTRACT(YEAR FROM sale_date)  AS year_number,
     EXTRACT(MONTH FROM sale_date) AS month_number,

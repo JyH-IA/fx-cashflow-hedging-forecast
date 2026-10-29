@@ -80,7 +80,7 @@ docs/          architecture, contracts, finance, open questions
 
 ## Limitations and status
 
-- The quality gates (ruff, tests, secret scan, Docker build) run in CI. Strict type checking, the dependency audit and the image scan are advisory until the first full run has been cleaned up.
+- The quality gates (ruff, tests with at least 80 % coverage, secret scan, Docker build) run in CI. Strict type checking (`mypy --strict`) and the dependency audit are advisory while the remaining type errors are cleaned up.
 - A target of MAPE below 2 % at 90 days is not used as a success criterion: exchange rates behave close to a random walk, so the honest benchmark is the random walk itself.
 - The hedging simulation assumes the next month's USD inflow is known when the hedge is placed, to isolate FX risk. It is a historical simulation, not an A/B test.
 - MLflow tracking, a Java client example and a hashed `requirements.lock` are not implemented. See [open questions](docs/open_questions.md) for the full list of items to verify.

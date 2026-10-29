@@ -1,4 +1,4 @@
--- Daily cash-in series between two dates (inclusive). Parameters: :start_date, :end_date.
+-- Daily cash-in series between two dates (inclusive), bound as start_date and end_date.
 SELECT
     sale_date      AS "date",
     occupancy_rate AS occupancy_rate,
