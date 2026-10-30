@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 import pandas as pd
 
@@ -12,7 +14,17 @@ from fxhedge.model_training import LastValueBase, Target, TrainedModel, ZeroResi
 
 DEFAULT_RATIOS: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
 TARGET_LABELS: dict[str, str] = {"y_fx": "USD/MXN", "y_cash": "USD cash-in"}
+METRICS_FILE = Path("reports") / "metrics.json"
+MODEL_LABELS: dict[str, str] = {
+    "hybrid": "Hybrid",
+    "xgboost": "XGBoost",
+    "sarima": "SARIMA",
+    "random_walk": "Random walk",
+    "seasonal_naive_7": "Seasonal naive (7 days)",
+    "seasonal_naive_365": "Seasonal naive (365 days)",
+}
 _REQUIRED = ("fx_predicted", "fx_lower", "fx_upper", "cash_expected_usd")
+_COMPARISON_COLUMNS = ("target", "model", "horizon", "rmse_vs_random_walk")
 
 
 def _check_forecast(frame: pd.DataFrame) -> None:
@@ -157,3 +169,54 @@ def base_only_notices(models: Mapping[Target, TrainedModel]) -> list[str]:
             f"the base model alone ({detail}). The scenario selector does not change it."
         )
     return notices
+
+
+def load_model_comparison(path: Path = METRICS_FILE) -> pd.DataFrame | None:
+    """Read the backtest summary that ``fxhedge.evaluation`` writes.
+
+    Returns ``None`` when the file does not exist.
+
+    Raises:
+        ValueError: if the file is not valid JSON, is not a list of records or lacks the
+            columns needed for the comparison.
+    """
+    if not path.exists():
+        return None
+    try:
+        records = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path} is not valid JSON") from exc
+    if not isinstance(records, list):
+        raise ValueError(f"{path} must contain a list of records")
+    frame = pd.DataFrame(records)
+    missing = [column for column in _COMPARISON_COLUMNS if column not in frame.columns]
+    if missing:
+        raise ValueError(f"{path} is missing columns: {missing}")
+    return frame
+
+
+def comparison_table(metrics: pd.DataFrame, target: str) -> pd.DataFrame:
+    """RMSE relative to the random walk, with models as rows and horizons as columns.
+
+    Models are sorted from best (lowest average ratio) to worst. Values are text with two
+    decimals, and ``n/a`` where the ratio is missing. The result is empty when ``metrics``
+    has no rows for ``target``.
+    """
+    subset = metrics.loc[metrics["target"] == target]
+    if subset.empty:
+        return pd.DataFrame()
+    ratios = pd.to_numeric(subset["rmse_vs_random_walk"], errors="coerce")
+    wide = (
+        subset.assign(ratio=ratios)
+        .pivot_table(
+            index="model", columns="horizon", values="ratio", aggfunc="mean", dropna=False
+        )
+        .sort_index(axis=1)
+    )
+    wide = wide.loc[wide.mean(axis=1).sort_values().index]
+    table = pd.DataFrame(index=[MODEL_LABELS.get(str(name), str(name)) for name in wide.index])
+    for horizon in wide.columns:
+        table[f"{horizon} days"] = [
+            "n/a" if pd.isna(value) else f"{value:.2f}" for value in wide[horizon]
+        ]
+    return table
