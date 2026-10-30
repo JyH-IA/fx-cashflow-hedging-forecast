@@ -20,12 +20,13 @@ All notable changes to this project are documented here. The format follows
 - Random-walk base (`LastValueBase`) with its own JSON artifact. `metadata.json` now records `base_model`, `residual_model` and the gate result.
 - `evaluate-full` runs the gate on every backtest fold, and `explain` skips SHAP for a target whose tree was rejected.
 - The dashboard shows a notice for each target whose forecast comes from the base model alone because the gate rejected its tree (`base_only_notices`).
-- The dashboard has a "Model comparison (backtest)" section that reads `reports/metrics.json`, written by `make evaluate` and `make evaluate-full`, and shows each model's RMSE relative to the random walk by target and horizon.
+- The dashboard has a model comparison that reads `reports/metrics.json`, written by `make evaluate` and `make evaluate-full`, and shows each model's RMSE relative to the random walk by target and horizon, with one plain sentence per target (`reliability_verdicts`).
 
 ### Changed
 
 - The hybrid for `y_fx` uses a random walk as its base instead of Prophet, which lost to a random walk at every origin of the diagnostic. `y_cash` keeps Prophet. The base is chosen per target in `BASE_BY_TARGET`.
 - Residuals of the random-walk base are computed with no gap, because that base is refitted up to each forecast origin.
+- The dashboard is organized in four tabs (Summary, Hedging, How reliable is it?, Technical details). The Summary opens with a headline and four key figures about what the selected hedge protects, the filters are the planning horizon in months, a named hedge level and the USD amount, and the scenario selector and run date moved to Advanced settings.
 
 ### Known limitations
 
@@ -33,5 +34,6 @@ All notable changes to this project are documented here. The format follows
 - The Docker base image is not pinned by digest.
 - The hybrid model carries exogenous variables forward over the horizon.
 - The gate uses a single validation window and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize. Only rejections are logged.
-- When the gate rejects the tree, the forecast of that target ignores the scenario shocks. The dashboard shows a notice about it.
-- The model comparison needs `reports/metrics.json`, which is not versioned and is not mounted in the Docker `app` service. Without it the section explains how to create the file.
+- When the gate rejects the tree, the forecast of that target ignores the scenario shocks. The Technical details tab of the dashboard explains it.
+- The model comparison needs `reports/metrics.json`, which is not versioned and is not mounted in the Docker `app` service. Without it the tab explains how to create the file.
+- The dashboard text is in English only, and the layout has not been checked on a phone.
