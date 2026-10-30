@@ -4,6 +4,9 @@ The hybrid models trend and seasonality with Prophet and lets LightGBM learn the
 residuals from exogenous and calendar features. Residuals are generated out of sample
 with a time-series split, so the residual model never learns from in-sample fits.
 
+An optional validation gate keeps the residual model only if it lowers the error on a
+holdout of the most recent residuals; otherwise the hybrid falls back to Prophet alone.
+
 Future exogenous values are held at their last known value (carry-forward). Target-derived
 lag and rolling columns are excluded from the model features because they are not known
 over a 30/60/90-day horizon.
@@ -16,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -44,6 +48,15 @@ BASE_ARTIFACT = "prophet_model.json"
 LIGHTGBM_ARTIFACT = "lightgbm_model.txt"
 XGBOOST_ARTIFACT = "xgboost_model.json"
 METADATA_FILE = "metadata.json"
+MIN_GATE_TRAIN_ROWS = 30
+GATE_PARAMS: Params = {
+    "num_leaves": 8,
+    "learning_rate": 0.05,
+    "n_estimators": 100,
+    "min_child_samples": 40,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+}
 _TARGET_PREFIXES = ("y_fx", "y_cash", "occupancy_rate")
 _TRACKED_LIBRARIES = ("prophet", "lightgbm", "xgboost", "optuna", "pandas", "numpy")
 
@@ -75,6 +88,21 @@ TreeLoader = Callable[[Path], Predictor]
 
 
 @dataclass(frozen=True)
+class GateResult:
+    """Outcome of the validation gate.
+
+    ``rmse_base`` is the holdout error of the base model alone (the residuals themselves);
+    ``rmse_hybrid`` is the holdout error after adding the tree. Both are NaN when there were
+    too few rows to validate.
+    """
+
+    use_tree: bool
+    rmse_base: float
+    rmse_hybrid: float
+    holdout_rows: int
+
+
+@dataclass(frozen=True)
 class TrainedModel:
     """A fitted model: optional Prophet base plus a tree model over ``feature_columns``."""
 
@@ -85,6 +113,17 @@ class TrainedModel:
     feature_columns: tuple[str, ...]
     params: Params
     train_end: pd.Timestamp
+    gate: GateResult | None = None
+
+
+class ZeroResidual:
+    """Residual model that adds nothing; used when the validation gate rejects the tree."""
+
+    def predict(self, features: pd.DataFrame) -> NDArray[np.float64]:
+        return np.zeros(len(features), dtype=np.float64)
+
+    def save(self, path: Path) -> None:
+        """Nothing to save: this model has no parameters."""
 
 
 class ProphetBase:
@@ -284,6 +323,15 @@ def fit_lightgbm_tuned(
     return TreeModel(estimator, "lightgbm"), best
 
 
+def fit_lightgbm_fixed(
+    features: pd.DataFrame, residuals: pd.Series, cfg: TrainingConfig
+) -> tuple[Predictor, Params]:
+    """Fit LightGBM with fixed, conservative settings (no tuning). Used by the gate."""
+    estimator = build_lightgbm(GATE_PARAMS, cfg.seed)
+    estimator.fit(features, residuals)
+    return TreeModel(estimator, "lightgbm"), dict(GATE_PARAMS)
+
+
 def fit_xgboost_direct(
     features: pd.DataFrame, target: pd.Series, cfg: TrainingConfig
 ) -> tuple[Predictor, Params]:
@@ -308,18 +356,64 @@ def _prepare(df: pd.DataFrame, target: Target) -> tuple[pd.DataFrame, pd.Series,
     return data, series, select_feature_columns(data.reset_index())
 
 
+def evaluate_gate(
+    features: pd.DataFrame, residuals: pd.Series, cfg: TrainingConfig, fitter: TreeFitter
+) -> GateResult:
+    """Decide whether a residual tree helps, using the most recent residuals as holdout.
+
+    The tree is fitted on the earlier residuals, ``cfg.gap`` rows are skipped, and its
+    predictions are compared with the holdout residuals. Using only the base model means
+    predicting a residual of zero, so the tree is kept only when its holdout RMSE is lower
+    than that of the residuals themselves by more than ``cfg.gate_min_improvement``.
+
+    With fewer than ``MIN_GATE_TRAIN_ROWS`` rows left for fitting, the tree cannot be
+    validated and is rejected.
+    """
+    total = len(residuals)
+    holdout = max(1, round(total * cfg.gate_holdout_fraction))
+    train_rows = total - holdout - cfg.gap
+    if train_rows < MIN_GATE_TRAIN_ROWS:
+        return GateResult(False, float("nan"), float("nan"), holdout)
+    tree, _ = fitter(features.iloc[:train_rows], residuals.iloc[:train_rows], cfg)
+    actual = residuals.iloc[total - holdout :].to_numpy(dtype=np.float64)
+    predicted = tree.predict(features.iloc[total - holdout :])
+    rmse_base = float(np.sqrt(np.mean(actual**2)))
+    rmse_hybrid = float(np.sqrt(np.mean((actual - predicted) ** 2)))
+    use_tree = rmse_hybrid < rmse_base * (1.0 - cfg.gate_min_improvement)
+    return GateResult(use_tree, rmse_base, rmse_hybrid, holdout)
+
+
 def fit_hybrid(
     df: pd.DataFrame,
     target: Target,
     cfg: TrainingConfig,
     base_fitter: BaseFitter = fit_prophet_base,
     residual_fitter: TreeFitter = fit_lightgbm_tuned,
+    gate_fitter: TreeFitter | None = None,
 ) -> TrainedModel:
-    """Fit the Prophet + tree hybrid for ``target``."""
+    """Fit the Prophet + tree hybrid for ``target``.
+
+    When ``gate_fitter`` is given, a validation gate runs first (see ``evaluate_gate``).
+    If it rejects the tree, the model keeps Prophet alone and ``residual_fitter`` is not
+    called. Without ``gate_fitter`` the tree is always fitted.
+    """
     data, series, columns = _prepare(df, target)
     residuals = oos_residuals(series, base_fitter, cfg)
     features = data.loc[residuals.index, columns]
-    tree, params = residual_fitter(features, residuals, cfg)
+    gate = evaluate_gate(features, residuals, cfg, gate_fitter) if gate_fitter else None
+    tree: Predictor
+    params: Params
+    if gate is not None and not gate.use_tree:
+        logger.warning(
+            "Validation gate rejected the residual tree for %s (holdout RMSE %.4f with the "
+            "tree vs %.4f without it); using Prophet alone",
+            target,
+            gate.rmse_hybrid,
+            gate.rmse_base,
+        )
+        tree, params = ZeroResidual(), {}
+    else:
+        tree, params = residual_fitter(features, residuals, cfg)
     return TrainedModel(
         kind="hybrid",
         target=target,
@@ -328,6 +422,7 @@ def fit_hybrid(
         feature_columns=tuple(columns),
         params=params,
         train_end=pd.Timestamp(series.index[-1]),
+        gate=gate,
     )
 
 
@@ -380,6 +475,7 @@ def make_model_forecaster(
     base_fitter: BaseFitter = fit_prophet_base,
     residual_fitter: TreeFitter = fit_lightgbm_tuned,
     xgboost_fitter: TreeFitter = fit_xgboost_direct,
+    gate_fitter: TreeFitter | None = None,
 ) -> Forecaster:
     """Wrap a model as a backtest forecaster (refits on each fold; can be slow)."""
 
@@ -387,7 +483,7 @@ def make_model_forecaster(
         last = pd.Timestamp(train.index[-1])
         history = df[df["date"] <= last]
         model = (
-            fit_hybrid(history, target, cfg, base_fitter, residual_fitter)
+            fit_hybrid(history, target, cfg, base_fitter, residual_fitter, gate_fitter)
             if kind == "hybrid"
             else fit_xgboost(history, target, cfg, xgboost_fitter)
         )
@@ -408,16 +504,40 @@ def _library_versions() -> dict[str, str]:
     return versions
 
 
+def _clean_float(value: float) -> float | None:
+    return None if math.isnan(value) else value
+
+
+def _gate_info(gate: GateResult | None) -> dict[str, object] | None:
+    if gate is None:
+        return None
+    return {
+        "use_tree": gate.use_tree,
+        "rmse_base": _clean_float(gate.rmse_base),
+        "rmse_hybrid": _clean_float(gate.rmse_hybrid),
+        "holdout_rows": gate.holdout_rows,
+    }
+
+
 def save_model(model: TrainedModel, out_dir: Path) -> None:
-    """Write model artifacts and ``metadata.json`` (with SHA-256 hashes) to ``out_dir``."""
+    """Write model artifacts and ``metadata.json`` (with SHA-256 hashes) to ``out_dir``.
+
+    A model whose residual tree was rejected by the gate stores no tree artifact and
+    records ``"residual_model": "none"`` in the metadata.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     artifacts: dict[str, str] = {}
     if model.base is not None:
         (out_dir / BASE_ARTIFACT).write_text(model.base.to_json(), encoding="utf-8")
         artifacts[BASE_ARTIFACT] = sha256_file(out_dir / BASE_ARTIFACT)
     tree_name = LIGHTGBM_ARTIFACT if model.kind == "hybrid" else XGBOOST_ARTIFACT
-    model.tree.save(out_dir / tree_name)
-    artifacts[tree_name] = sha256_file(out_dir / tree_name)
+    disabled = isinstance(model.tree, ZeroResidual)
+    if disabled:
+        (out_dir / tree_name).unlink(missing_ok=True)
+    else:
+        model.tree.save(out_dir / tree_name)
+        artifacts[tree_name] = sha256_file(out_dir / tree_name)
+    residual_model = "none" if disabled else ("lightgbm" if model.kind == "hybrid" else "xgboost")
     info = {
         "kind": model.kind,
         "target": model.target,
@@ -426,6 +546,8 @@ def save_model(model: TrainedModel, out_dir: Path) -> None:
         "train_end": model.train_end.date().isoformat(),
         "git_commit": os.environ.get("GIT_COMMIT", "unknown"),
         "library_versions": _library_versions(),
+        "residual_model": residual_model,
+        "gate": _gate_info(model.gate),
         "artifacts": artifacts,
     }
     (out_dir / METADATA_FILE).write_text(json.dumps(info, indent=2), encoding="utf-8")
@@ -451,11 +573,16 @@ def load_trained_model(
         tree_loader = load_lightgbm if kind == "hybrid" else load_xgboost
     tree_name = LIGHTGBM_ARTIFACT if kind == "hybrid" else XGBOOST_ARTIFACT
     base = base_loader(model_dir / BASE_ARTIFACT) if kind == "hybrid" else None
+    tree: Predictor = (
+        ZeroResidual()
+        if info.get("residual_model") == "none"
+        else tree_loader(model_dir / tree_name)
+    )
     return TrainedModel(
         kind=kind,
         target=info["target"],
         base=base,
-        tree=tree_loader(model_dir / tree_name),
+        tree=tree,
         feature_columns=tuple(info["feature_columns"]),
         params=info["params"],
         train_end=pd.Timestamp(info["train_end"]),
@@ -471,14 +598,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--models-dir", type=Path, default=settings.models_dir)
     parser.add_argument("--skip-xgboost", action="store_true")
+    parser.add_argument(
+        "--no-gate",
+        action="store_true",
+        help="Always keep the residual tree, without the validation gate.",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     cfg = load_yaml_model(settings.configs_dir / "training.yaml", TrainingConfig)
     master = read_csv_with_date(args.master)
+    gate_fitter = None if args.no_gate else fit_lightgbm_fixed
     for target in TARGETS:
         logger.info("Training hybrid model for %s", target)
-        save_model(fit_hybrid(master, target, cfg), args.models_dir / target)
+        hybrid = fit_hybrid(master, target, cfg, gate_fitter=gate_fitter)
+        save_model(hybrid, args.models_dir / target)
         if not args.skip_xgboost:
             logger.info("Training XGBoost comparator for %s", target)
             save_model(fit_xgboost(master, target, cfg), args.models_dir / f"{target}_xgboost")
