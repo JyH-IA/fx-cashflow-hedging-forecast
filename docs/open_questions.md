@@ -18,8 +18,9 @@ Items marked `TODO(verify)` in the code and configuration, plus known gaps.
 
 ## Gate and base model
 
-- The `y_fx` hybrid is not equal to the random walk in the backtest, which means the gate accepted a tree in some folds and that tree hurt. This is inferred from the code, not measured: only rejections are logged, so the folds that accepted the tree are not visible.
-- The gate uses one validation window of about 270 rows (three blocks of 90 days) and `gate_min_improvement` is 0, so a small, noisy gain is enough to keep a tree. A margin such as 0.10 has not been tested.
+- In the last `y_fx` backtest (random-walk base) the log shows a gate rejection in 3 of 5 folds, so the tree was kept in the other 2. The hybrid ends above the random walk (1.15 to 1.56), while a random-walk base with a rejected tree would equal it exactly, so the two kept trees most likely hurt. The count of five folds comes from `n_splits: 5` and from the five rejections logged for `y_cash` in the same run. Only rejections are logged, so the validation errors of the kept trees are unknown; logging every gate decision is not done.
+- The `y_cash` gate rejected the tree in all five folds, so its backtest hybrid is Prophet alone.
+- The gate uses one validation window of about 270 rows (three blocks of 90 days) and `gate_min_improvement` is 0, so a small, noisy gain is enough to keep a tree. A margin such as 0.10 has not been tested, and it is not known whether it would have rejected the two kept `y_fx` trees.
 - `BASE_BY_TARGET` is fixed in code. Making it configurable, or choosing the base by backtest, is not done.
 - When the tree is rejected, the forecast ignores the scenario shocks, because only the tree uses the features. The dashboard scenarios for that target therefore show the same point forecast.
 - Prophet warns that yearly seasonality is under-identified with less than 730 days of history, which applies to the first backtest folds.

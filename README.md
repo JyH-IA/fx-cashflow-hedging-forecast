@@ -32,7 +32,7 @@ The figures come from a local `make evaluate-full` run on 2026-10-30, with five 
 | USD/MXN (`y_fx`) | Seasonal naive (7 days) | 1.02 | 1.01 | 1.03 |
 | USD/MXN (`y_fx`) | Hybrid (random-walk base) | 1.56 | 1.27 | 1.15 |
 
-- **Cash-in.** The hybrid is the best model at every horizon and beats the seasonal naive baseline. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
+- **Cash-in.** The hybrid is the best model at every horizon and beats the seasonal naive baseline. The gate rejected the residual tree in all five folds, so the hybrid is Prophet alone. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
 - **Exchange rate.** No model clearly beats the random walk. XGBoost is 5 % to 11 % better, SARIMA and the seasonal naive tie with it, and the hybrid is worse. The reports state this as it is, because exchange rates behave close to a random walk.
 
 What the iterations taught:
@@ -41,7 +41,7 @@ What the iterations taught:
 - **Validate the way you will predict.** The first gate used the true exogenous values of each day, but forecasts hold them at their last known value. Scoring with the values frozen at the forecast origin removed that optimism.
 - **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base. The hybrid's ratio for the exchange rate moved from 2.16, 1.65 and 1.81 to the figures above.
 - **Removing the tree helped cash-in.** Once the gate rejected the residual tree for cash-in, its ratio improved from 0.67, 0.56 and 0.49 to the figures above.
-- **The gate is not perfect.** It uses one validation window and a zero minimum improvement, so the exchange-rate hybrid still accepts a harmful tree in some folds. See the limitations below.
+- **The gate is not perfect.** It uses one validation window and a zero minimum improvement. In the last backtest it logged a rejection of the exchange-rate tree in only 3 of the 5 folds, so it kept the tree in the other 2. A random-walk base with a rejected tree would match the random walk exactly, and the hybrid still trails it, so those two trees most likely hurt. See the limitations below.
 
 ## Quick start
 
@@ -111,7 +111,7 @@ docs/          architecture, contracts, finance, open questions
 - CI runs ruff, `mypy --strict`, the tests (at least 80 % coverage), a secret scan and the Docker build. The dependency audit is advisory because new advisories can appear at any time.
 - A target of MAPE below 2 % at 90 days is not used as a success criterion: exchange rates behave close to a random walk, so the honest benchmark is the random walk itself.
 - When the gate rejects the tree for a target, its forecast comes from the base alone. The scenarios (plus or minus 10 %) shock only the model features, so they do not move that forecast.
-- The gate uses a single validation window (about three blocks of 90 days) and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize. The exchange-rate hybrid can therefore still trail the random walk; read `reports/backtest.md` for the current numbers.
+- The gate uses a single validation window (about three blocks of 90 days) and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize. In the last backtest the exchange-rate tree was kept in 2 of 5 folds and the hybrid still trails the random walk; read `reports/backtest.md` for the current numbers.
 - The hedging simulation assumes the next month's USD inflow is known when the hedge is placed, to isolate FX risk. It is a historical simulation, not an A/B test.
 - MLflow tracking, a Java client example and a hashed `requirements.lock` are not implemented. See [open questions](docs/open_questions.md) for the full list of items to verify.
 
