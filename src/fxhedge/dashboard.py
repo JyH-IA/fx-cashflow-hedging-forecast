@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import pandas as pd
 
 from fxhedge.config import BusinessConfig
 from fxhedge.finance import compute_hedge_savings, forward_rate, hedged_proceeds_mxn
+from fxhedge.model_training import LastValueBase, Target, TrainedModel, ZeroResidual
 
 DEFAULT_RATIOS: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
+TARGET_LABELS: dict[str, str] = {"y_fx": "USD/MXN", "y_cash": "USD cash-in"}
 _REQUIRED = ("fx_predicted", "fx_lower", "fx_upper", "cash_expected_usd")
 
 
@@ -25,6 +27,15 @@ def expected_cash_in_usd(frame: pd.DataFrame) -> float:
     """Total expected USD inflow over the forecast horizon."""
     _check_forecast(frame)
     return float(frame["cash_expected_usd"].sum())
+
+
+def notional_step(expected_cash_usd: float) -> float:
+    """Slider step for the amount to protect: about 1 % of the expected inflow, at least 1.
+
+    It is always a float, because Streamlit requires the minimum, maximum, value and step of
+    a slider to share the same numeric type.
+    """
+    return float(max(round(expected_cash_usd / 100.0), 1))
 
 
 def forecast_summary(frame: pd.DataFrame, spot: float) -> dict[str, float]:
@@ -123,3 +134,26 @@ def format_mxn(value: float) -> str:
     """Format an amount as ``$1,234,567 MXN``."""
     sign = "-" if value < 0 else ""
     return f"{sign}${abs(value):,.0f} MXN"
+
+
+def base_only_notices(models: Mapping[Target, TrainedModel]) -> list[str]:
+    """One notice for each target whose residual tree was rejected by the validation gate.
+
+    Such a forecast comes from the base model alone. The scenarios shock only the features of
+    the residual tree, so the selector does not change it. With a random-walk base the line
+    is flat at the last observed value.
+    """
+    notices: list[str] = []
+    for target, model in models.items():
+        if not isinstance(model.tree, ZeroResidual):
+            continue
+        label = TARGET_LABELS.get(target, target)
+        if isinstance(model.base, LastValueBase):
+            detail = "it repeats the last observed value, so the line is flat"
+        else:
+            detail = "it follows trend and seasonality only"
+        notices.append(
+            f"{label}: the validation gate rejected the residual model, so the forecast uses "
+            f"the base model alone ({detail}). The scenario selector does not change it."
+        )
+    return notices
