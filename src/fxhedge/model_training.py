@@ -1,11 +1,14 @@
-"""Model training: Prophet + LightGBM hybrid, XGBoost comparator and safe serialization.
+"""Model training: hybrid (base + LightGBM), XGBoost comparator and safe serialization.
 
-The hybrid models trend and seasonality with Prophet and lets LightGBM learn the Prophet
-residuals from exogenous and calendar features. Residuals are generated out of sample
-with a time-series split, so the residual model never learns from in-sample fits.
+The hybrid models a base forecast and lets LightGBM learn the base residuals from exogenous
+and calendar features. The base depends on the target: Prophet (trend and seasonality) for
+``y_cash``, which has a real seasonal pattern, and a random walk (the last observed value)
+for ``y_fx``, where Prophet was worse than a random walk at every origin tested. Residuals
+are generated out of sample with a time-series split, so the residual model never learns
+from in-sample fits.
 
 An optional validation gate keeps the residual model only if it lowers the error on a
-holdout of the most recent residuals; otherwise the hybrid falls back to Prophet alone.
+holdout of the most recent residuals; otherwise the hybrid falls back to the base alone.
 The gate scores the tree with exogenous features frozen at the forecast origin, exactly as
 they are at inference time, because the real values of the future are not known.
 
@@ -13,7 +16,8 @@ Future exogenous values are held at their last known value (carry-forward). Targ
 lag and rolling columns are excluded from the model features because they are not known
 over a 30/60/90-day horizon.
 
-Artifacts are JSON (Prophet, XGBoost) or LightGBM's text format; pickle is never used.
+Artifacts are JSON (Prophet, random walk, XGBoost) or LightGBM's text format; pickle is
+never used.
 """
 
 from __future__ import annotations
@@ -43,10 +47,13 @@ logger = logging.getLogger(__name__)
 
 Target = Literal["y_fx", "y_cash"]
 ModelKind = Literal["hybrid", "xgboost"]
+BaseKind = Literal["prophet", "last_value"]
 Params = dict[str, float | int]
 
 TARGETS: tuple[Target, ...] = ("y_fx", "y_cash")
+BASE_BY_TARGET: dict[Target, BaseKind] = {"y_fx": "last_value", "y_cash": "prophet"}
 BASE_ARTIFACT = "prophet_model.json"
+LAST_VALUE_ARTIFACT = "last_value_base.json"
 LIGHTGBM_ARTIFACT = "lightgbm_model.txt"
 XGBOOST_ARTIFACT = "xgboost_model.json"
 METADATA_FILE = "metadata.json"
@@ -68,7 +75,7 @@ class ModelIntegrityError(RuntimeError):
 
 
 class BaseForecaster(Protocol):
-    """Trend and seasonality model (Prophet)."""
+    """Base model of the hybrid (Prophet or random walk)."""
 
     def predict(self, dates: pd.DatetimeIndex) -> NDArray[np.float64]: ...
 
@@ -106,7 +113,7 @@ class GateResult:
 
 @dataclass(frozen=True)
 class TrainedModel:
-    """A fitted model: optional Prophet base plus a tree model over ``feature_columns``."""
+    """A fitted model: optional base plus a tree model over ``feature_columns``."""
 
     kind: ModelKind
     target: Target
@@ -144,6 +151,26 @@ class ProphetBase:
         return str(model_to_json(self._model))
 
 
+class LastValueBase:
+    """Random-walk base: every future date gets the last observed value."""
+
+    def __init__(self, value: float, last_date: pd.Timestamp) -> None:
+        self.value = value
+        self.last_date = last_date
+
+    def predict(self, dates: pd.DatetimeIndex) -> NDArray[np.float64]:
+        return np.full(len(dates), self.value, dtype=np.float64)
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {
+                "kind": "last_value",
+                "value": self.value,
+                "last_date": self.last_date.date().isoformat(),
+            }
+        )
+
+
 class TreeModel:
     """Adapter around a fitted LightGBM or XGBoost model (sklearn API or loaded booster)."""
 
@@ -172,11 +199,22 @@ def fit_prophet_base(series: pd.Series) -> BaseForecaster:
     return ProphetBase(model)
 
 
+def fit_last_value_base(series: pd.Series) -> BaseForecaster:
+    """Random-walk base: the last observed value of a date-indexed series."""
+    return LastValueBase(float(series.iloc[-1]), pd.Timestamp(series.index[-1]))
+
+
 def load_prophet_base(path: Path) -> BaseForecaster:
     """Load a Prophet model from its JSON artifact."""
     from prophet.serialize import model_from_json
 
     return ProphetBase(model_from_json(path.read_text(encoding="utf-8")))
+
+
+def load_last_value_base(path: Path) -> BaseForecaster:
+    """Load a random-walk base from its JSON artifact."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return LastValueBase(float(data["value"]), pd.Timestamp(data["last_date"]))
 
 
 def load_lightgbm(path: Path) -> Predictor:
@@ -214,18 +252,21 @@ def select_feature_columns(df: pd.DataFrame) -> list[str]:
     return columns
 
 
-def residual_split_count(n_rows: int, cfg: TrainingConfig) -> int:
+def residual_split_count(n_rows: int, cfg: TrainingConfig, gap: int | None = None) -> int:
     """Number of ``residual_test_size`` blocks that fit after the first training window.
 
     The first training window keeps at least ``residual_min_train`` rows after skipping
-    ``cfg.gap`` rows. The result is capped at ``cfg.residual_max_splits`` and is 0 when
-    the series is too short for even one block.
+    ``gap`` rows (``cfg.gap`` unless overridden). The result is capped at
+    ``cfg.residual_max_splits`` and is 0 when the series is too short for even one block.
     """
-    available = (n_rows - cfg.gap - cfg.residual_min_train) // cfg.residual_test_size
+    skipped = cfg.gap if gap is None else gap
+    available = (n_rows - skipped - cfg.residual_min_train) // cfg.residual_test_size
     return max(0, min(available, cfg.residual_max_splits))
 
 
-def oos_residuals(series: pd.Series, fit_base: BaseFitter, cfg: TrainingConfig) -> pd.Series:
+def oos_residuals(
+    series: pd.Series, fit_base: BaseFitter, cfg: TrainingConfig, gap: int | None = None
+) -> pd.Series:
     """Out-of-sample residuals of the base model using an expanding time-series split.
 
     With at least ``cfg.residual_min_splits`` blocks available, each test block has
@@ -234,16 +275,18 @@ def oos_residuals(series: pd.Series, fit_base: BaseFitter, cfg: TrainingConfig) 
     more than a year, and the tree would learn a correction for an error that does not
     exist at 30 to 90 days. With fewer rows the split uses ``cfg.n_splits`` as before.
 
-    ``cfg.gap`` rows are skipped between each training window and its test block, which
-    mimics forecasting several weeks ahead.
+    ``gap`` rows (``cfg.gap`` unless overridden) are skipped between each training window
+    and its test block. A gap mimics forecasting several weeks ahead; ``gap=0`` matches a
+    base refitted up to the forecast origin, as the random walk is.
     """
-    blocks = residual_split_count(len(series), cfg)
+    skipped = cfg.gap if gap is None else gap
+    blocks = residual_split_count(len(series), cfg, skipped)
     if blocks >= cfg.residual_min_splits:
         splitter = TimeSeriesSplit(
-            n_splits=blocks, gap=cfg.gap, test_size=cfg.residual_test_size
+            n_splits=blocks, gap=skipped, test_size=cfg.residual_test_size
         )
     else:
-        splitter = TimeSeriesSplit(n_splits=cfg.n_splits, gap=cfg.gap)
+        splitter = TimeSeriesSplit(n_splits=cfg.n_splits, gap=skipped)
     parts: list[pd.Series] = []
     for train_index, test_index in splitter.split(series):
         base = fit_base(series.iloc[train_index])
@@ -434,19 +477,29 @@ def fit_hybrid(
     df: pd.DataFrame,
     target: Target,
     cfg: TrainingConfig,
-    base_fitter: BaseFitter = fit_prophet_base,
+    base_fitter: BaseFitter | None = None,
     residual_fitter: TreeFitter = fit_lightgbm_tuned,
     gate_fitter: TreeFitter | None = None,
 ) -> TrainedModel:
-    """Fit the Prophet + tree hybrid for ``target``.
+    """Fit the base + tree hybrid for ``target``.
+
+    Without ``base_fitter`` the base follows ``BASE_BY_TARGET``: a random walk for ``y_fx``
+    (its residuals are computed with no gap, because it is refitted up to every origin) and
+    Prophet for ``y_cash``. An explicit ``base_fitter`` keeps ``cfg.gap``.
 
     When ``gate_fitter`` is given, a validation gate runs first (see ``evaluate_gate``) with
     exogenous features frozen at each block origin. If it rejects the tree, the model keeps
-    Prophet alone and ``residual_fitter`` is not called. Without ``gate_fitter`` the tree is
-    always fitted.
+    the base alone and ``residual_fitter`` is not called. Without ``gate_fitter`` the tree
+    is always fitted.
     """
     data, series, columns = _prepare(df, target)
-    residuals = oos_residuals(series, base_fitter, cfg)
+    residual_gap: int | None = None
+    if base_fitter is None:
+        if BASE_BY_TARGET[target] == "last_value":
+            base_fitter, residual_gap = fit_last_value_base, 0
+        else:
+            base_fitter = fit_prophet_base
+    residuals = oos_residuals(series, base_fitter, cfg, gap=residual_gap)
     features = data.loc[residuals.index, columns]
     gate = (
         evaluate_gate(features, residuals, cfg, gate_fitter, carry_source=data[columns])
@@ -458,7 +511,7 @@ def fit_hybrid(
     if gate is not None and not gate.use_tree:
         logger.warning(
             "Validation gate rejected the residual tree for %s (holdout RMSE %.4f with the "
-            "tree vs %.4f without it); using Prophet alone",
+            "tree vs %.4f without it); using the base model alone",
             target,
             gate.rmse_hybrid,
             gate.rmse_base,
@@ -524,7 +577,7 @@ def make_model_forecaster(
     target: Target,
     cfg: TrainingConfig,
     kind: ModelKind = "hybrid",
-    base_fitter: BaseFitter = fit_prophet_base,
+    base_fitter: BaseFitter | None = None,
     residual_fitter: TreeFitter = fit_lightgbm_tuned,
     xgboost_fitter: TreeFitter = fit_xgboost_direct,
     gate_fitter: TreeFitter | None = None,
@@ -575,13 +628,21 @@ def save_model(model: TrainedModel, out_dir: Path) -> None:
     """Write model artifacts and ``metadata.json`` (with SHA-256 hashes) to ``out_dir``.
 
     A model whose residual tree was rejected by the gate stores no tree artifact and
-    records ``"residual_model": "none"`` in the metadata.
+    records ``"residual_model": "none"`` in the metadata. The base is recorded in
+    ``"base_model"`` (``prophet``, ``last_value`` or ``none``), and the artifact of the
+    other base type is removed so that a stale file never lingers.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     artifacts: dict[str, str] = {}
+    base_model = "none"
     if model.base is not None:
-        (out_dir / BASE_ARTIFACT).write_text(model.base.to_json(), encoding="utf-8")
-        artifacts[BASE_ARTIFACT] = sha256_file(out_dir / BASE_ARTIFACT)
+        is_last_value = isinstance(model.base, LastValueBase)
+        base_name = LAST_VALUE_ARTIFACT if is_last_value else BASE_ARTIFACT
+        stale_name = BASE_ARTIFACT if is_last_value else LAST_VALUE_ARTIFACT
+        base_model = "last_value" if is_last_value else "prophet"
+        (out_dir / stale_name).unlink(missing_ok=True)
+        (out_dir / base_name).write_text(model.base.to_json(), encoding="utf-8")
+        artifacts[base_name] = sha256_file(out_dir / base_name)
     tree_name = LIGHTGBM_ARTIFACT if model.kind == "hybrid" else XGBOOST_ARTIFACT
     disabled = isinstance(model.tree, ZeroResidual)
     if disabled:
@@ -598,6 +659,7 @@ def save_model(model: TrainedModel, out_dir: Path) -> None:
         "train_end": model.train_end.date().isoformat(),
         "git_commit": os.environ.get("GIT_COMMIT", "unknown"),
         "library_versions": _library_versions(),
+        "base_model": base_model,
         "residual_model": residual_model,
         "gate": _gate_info(model.gate),
         "artifacts": artifacts,
@@ -612,6 +674,10 @@ def load_trained_model(
 ) -> TrainedModel:
     """Load a model after verifying every artifact against its recorded SHA-256.
 
+    ``base_loader`` loads a Prophet base; a random-walk base (``base_model`` equal to
+    ``last_value``) is always read with ``load_last_value_base``. Metadata written before
+    ``base_model`` existed is treated as Prophet.
+
     Raises:
         ModelIntegrityError: if an artifact is missing or has been modified.
     """
@@ -624,7 +690,12 @@ def load_trained_model(
     if tree_loader is None:
         tree_loader = load_lightgbm if kind == "hybrid" else load_xgboost
     tree_name = LIGHTGBM_ARTIFACT if kind == "hybrid" else XGBOOST_ARTIFACT
-    base = base_loader(model_dir / BASE_ARTIFACT) if kind == "hybrid" else None
+    base: BaseForecaster | None = None
+    if kind == "hybrid":
+        if info.get("base_model", "prophet") == "last_value":
+            base = load_last_value_base(model_dir / LAST_VALUE_ARTIFACT)
+        else:
+            base = base_loader(model_dir / BASE_ARTIFACT)
     tree: Predictor = (
         ZeroResidual()
         if info.get("residual_model") == "none"
