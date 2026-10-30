@@ -173,13 +173,36 @@ def select_feature_columns(df: pd.DataFrame) -> list[str]:
     return columns
 
 
+def residual_split_count(n_rows: int, cfg: TrainingConfig) -> int:
+    """Number of ``residual_test_size`` blocks that fit after the first training window.
+
+    The first training window keeps at least ``residual_min_train`` rows after skipping
+    ``cfg.gap`` rows. The result is capped at ``cfg.residual_max_splits`` and is 0 when
+    the series is too short for even one block.
+    """
+    available = (n_rows - cfg.gap - cfg.residual_min_train) // cfg.residual_test_size
+    return max(0, min(available, cfg.residual_max_splits))
+
+
 def oos_residuals(series: pd.Series, fit_base: BaseFitter, cfg: TrainingConfig) -> pd.Series:
     """Out-of-sample residuals of the base model using an expanding time-series split.
+
+    With at least ``cfg.residual_min_splits`` blocks available, each test block has
+    ``cfg.residual_test_size`` rows, so the base model is judged over a span close to the
+    forecast horizon. Very long test blocks would make Prophet extrapolate its trend for
+    more than a year, and the tree would learn a correction for an error that does not
+    exist at 30 to 90 days. With fewer rows the split uses ``cfg.n_splits`` as before.
 
     ``cfg.gap`` rows are skipped between each training window and its test block, which
     mimics forecasting several weeks ahead.
     """
-    splitter = TimeSeriesSplit(n_splits=cfg.n_splits, gap=cfg.gap)
+    blocks = residual_split_count(len(series), cfg)
+    if blocks >= cfg.residual_min_splits:
+        splitter = TimeSeriesSplit(
+            n_splits=blocks, gap=cfg.gap, test_size=cfg.residual_test_size
+        )
+    else:
+        splitter = TimeSeriesSplit(n_splits=cfg.n_splits, gap=cfg.gap)
     parts: list[pd.Series] = []
     for train_index, test_index in splitter.split(series):
         base = fit_base(series.iloc[train_index])
