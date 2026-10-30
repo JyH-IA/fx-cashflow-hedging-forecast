@@ -10,6 +10,20 @@ Items marked `TODO(verify)` in the code and configuration, plus known gaps.
 - The Trivy action version used at first did not exist, so the image scan step was removed.
 - `mypy --strict` is now a blocking job.
 
+## Status after the validation gate (2026-10-30)
+
+- CI passes with the validation gate, the carry-forward validation and the random-walk base for `y_fx`.
+- In a local `make evaluate-full` run, the `y_cash` hybrid (Prophet base, tree rejected) was the best model at 30, 60 and 90 days (`rmse_vs_random_walk` 0.49, 0.42 and 0.38). The `y_fx` hybrid still trailed the random walk (1.56, 1.27 and 1.15) while XGBoost was slightly better than it (0.89 to 0.95). Regenerate the figures with `make evaluate-full`; they depend on the data in use.
+- Training with the gate rejected the tree for both targets, so the stored `y_fx` model is the random walk and the stored `y_cash` model is Prophet alone.
+
+## Gate and base model
+
+- The `y_fx` hybrid is not equal to the random walk in the backtest, which means the gate accepted a tree in some folds and that tree hurt. This is inferred from the code, not measured: only rejections are logged, so the folds that accepted the tree are not visible.
+- The gate uses one validation window of about 270 rows (three blocks of 90 days) and `gate_min_improvement` is 0, so a small, noisy gain is enough to keep a tree. A margin such as 0.10 has not been tested.
+- `BASE_BY_TARGET` is fixed in code. Making it configurable, or choosing the base by backtest, is not done.
+- When the tree is rejected, the forecast ignores the scenario shocks, because only the tree uses the features. The dashboard scenarios for that target therefore show the same point forecast.
+- Prophet warns that yearly seasonality is under-identified with less than 730 days of history, which applies to the first backtest folds.
+
 ## External identifiers and APIs
 
 - Banxico SIE series IDs in `configs/series.yaml` (`SF43718`, `SF43783`, `SP1`) and the FRED series `DFF`: confirm against the providers' documentation.
@@ -20,6 +34,7 @@ Items marked `TODO(verify)` in the code and configuration, plus known gaps.
 
 - Real Prophet fitting and its JSON serialization (tests use a lightweight stand-in).
 - Real XGBoost training and JSON artifacts, and saving/loading real LightGBM artifacts.
+- The validation gate with a real LightGBM tree (tests use stub trees).
 - SHAP `TreeExplainer` on a loaded booster.
 - The full `make demo` pipeline on a developer machine.
 

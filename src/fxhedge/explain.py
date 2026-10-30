@@ -19,8 +19,8 @@ from fxhedge.model_training import TARGETS, TrainedModel, ZeroResidual, load_tra
 logger = logging.getLogger(__name__)
 
 DISABLED_MESSAGE = (
-    "the validation gate disabled the residual model, so the forecast uses Prophet only "
-    "and there is nothing to explain with SHAP."
+    "the validation gate disabled the residual model, so the forecast uses the base model "
+    "alone and there is nothing to explain with SHAP."
 )
 
 

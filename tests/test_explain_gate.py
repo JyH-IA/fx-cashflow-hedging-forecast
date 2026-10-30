@@ -45,4 +45,4 @@ def test_shap_refuses_a_disabled_residual_model() -> None:
 
 
 def test_disabled_message_explains_the_fallback() -> None:
-    assert "Prophet only" in DISABLED_MESSAGE
+    assert "base model alone" in DISABLED_MESSAGE

@@ -76,7 +76,8 @@ class TrainingConfig(_FrozenModel):
 
     The ``gate_*`` fields control the validation gate. The last ``gate_holdout_fraction`` of
     the residuals is kept for validation; the tree is used only if it lowers the holdout
-    error by more than ``gate_min_improvement`` (a fraction) compared with Prophet alone.
+    error by more than ``gate_min_improvement`` (a fraction) compared with the base model
+    alone.
     """
 
     horizons: list[int] = Field(default_factory=lambda: [30, 60, 90])
