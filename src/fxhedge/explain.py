@@ -14,9 +14,14 @@ from numpy.typing import NDArray
 
 from fxhedge.config import load_settings
 from fxhedge.io_utils import read_csv_with_date
-from fxhedge.model_training import TARGETS, TrainedModel, load_trained_model
+from fxhedge.model_training import TARGETS, TrainedModel, ZeroResidual, load_trained_model
 
 logger = logging.getLogger(__name__)
+
+DISABLED_MESSAGE = (
+    "the validation gate disabled the residual model, so the forecast uses Prophet only "
+    "and there is nothing to explain with SHAP."
+)
 
 
 @dataclass(frozen=True)
@@ -28,11 +33,17 @@ class ShapResult:
     base_value: float
 
 
+def residual_model_disabled(model: TrainedModel) -> bool:
+    """True when the validation gate replaced the residual tree with a zero residual."""
+    return isinstance(model.tree, ZeroResidual)
+
+
 def compute_shap_values(model: TrainedModel, features: pd.DataFrame) -> ShapResult:
     """Compute SHAP values for the tree part of ``model``.
 
     Raises:
-        TypeError: if the tree model does not expose its estimator.
+        TypeError: if the tree model does not expose its estimator, for example when the
+            validation gate disabled the residual model.
     """
     import shap
 
@@ -90,7 +101,11 @@ def save_shap_summary(result: ShapResult, out_path: Path, max_features: int = 15
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Command-line entry point: SHAP figures and a driver summary per target."""
+    """Command-line entry point: SHAP figures and a driver summary per target.
+
+    A target whose residual model was disabled by the validation gate is listed in the
+    summary without a figure.
+    """
     settings = load_settings()
     parser = argparse.ArgumentParser(description="Explain trained models with SHAP.")
     parser.add_argument(
@@ -106,9 +121,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     lines = ["# Model drivers (SHAP)", ""]
     for target in TARGETS:
         model = load_trained_model(args.models_dir / target)
+        if residual_model_disabled(model):
+            logger.warning("%s: %s", target, DISABLED_MESSAGE)
+            lines.append(f"- **{target}**: {DISABLED_MESSAGE}")
+            continue
         result = compute_shap_values(model, master)
         save_shap_summary(result, args.out / "figures" / f"shap_summary_{target}.png")
         lines.append(f"- **{target}**: {describe_drivers(result)}")
+    args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "shap_drivers.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     logger.info("Wrote SHAP outputs to %s", args.out)
     return 0
