@@ -95,7 +95,9 @@ def forecast_chart(frame: pd.DataFrame) -> go.Figure:
 
 def outcome_range_chart(table: pd.DataFrame, selected_ratio: float) -> go.Figure:
     """Bars from the bad case to the good case for each hedge level; the range narrows."""
-    labels = [HEDGE_LABEL_BY_RATIO.get(float(ratio), f"{ratio:.0%}") for ratio in table["hedge_ratio"]]
+    labels = [
+        HEDGE_LABEL_BY_RATIO.get(float(ratio), f"{ratio:.0%}") for ratio in table["hedge_ratio"]
+    ]
     colors = ["#1f77b4" if ratio == selected_ratio else "#c7d7ea" for ratio in table["hedge_ratio"]]
     figure = go.Figure()
     figure.add_trace(

@@ -236,7 +236,9 @@ def summary_headline(
 
 def friendly_impact_table(table: pd.DataFrame) -> pd.DataFrame:
     """Hedge levels side by side in plain words and compact amounts."""
-    labels = [HEDGE_LABEL_BY_RATIO.get(float(ratio), f"{ratio:.0%}") for ratio in table["hedge_ratio"]]
+    labels = [
+        HEDGE_LABEL_BY_RATIO.get(float(ratio), f"{ratio:.0%}") for ratio in table["hedge_ratio"]
+    ]
     shown = pd.DataFrame({"Hedge level": labels})
     shown["Forward rate"] = table["forward_rate"].map("{:.4f}".format)
     columns = (
