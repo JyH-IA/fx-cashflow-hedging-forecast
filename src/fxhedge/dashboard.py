@@ -29,6 +29,15 @@ def expected_cash_in_usd(frame: pd.DataFrame) -> float:
     return float(frame["cash_expected_usd"].sum())
 
 
+def notional_step(expected_cash_usd: float) -> float:
+    """Slider step for the amount to protect: about 1 % of the expected inflow, at least 1.
+
+    It is always a float, because Streamlit requires the minimum, maximum, value and step of
+    a slider to share the same numeric type.
+    """
+    return float(max(round(expected_cash_usd / 100.0), 1))
+
+
 def forecast_summary(frame: pd.DataFrame, spot: float) -> dict[str, float]:
     """Headline figures: settlement forecast, its interval and the change versus spot."""
     _check_forecast(frame)

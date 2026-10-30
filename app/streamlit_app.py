@@ -21,6 +21,7 @@ from fxhedge.dashboard import (
     forecast_summary,
     format_mxn,
     impact_table,
+    notional_step,
 )
 from fxhedge.inference import Scenario, load_models, predict_forecast
 from fxhedge.io_utils import read_csv_with_date
@@ -132,7 +133,7 @@ def main() -> None:
             min_value=0.0,
             max_value=max(expected * 2.0, 1.0),
             value=float(expected),
-            step=max(round(expected / 100.0), 1.0),
+            step=notional_step(expected),
         )
     )
     ratio = st.sidebar.slider("Selected hedge ratio (%)", 0, 100, 50) / 100.0
