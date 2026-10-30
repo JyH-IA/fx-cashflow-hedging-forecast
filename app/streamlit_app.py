@@ -16,11 +16,15 @@ from fxhedge.api_models import DISCLAIMER, HORIZONS
 from fxhedge.config import BusinessConfig, load_settings, load_yaml_model
 from fxhedge.dashboard import (
     DEFAULT_RATIOS,
+    METRICS_FILE,
+    TARGET_LABELS,
     base_only_notices,
     commission_saving_mxn,
+    comparison_table,
     forecast_summary,
     format_mxn,
     impact_table,
+    load_model_comparison,
     notional_step,
 )
 from fxhedge.inference import Scenario, load_models, predict_forecast
@@ -90,6 +94,33 @@ def display_table(table: pd.DataFrame) -> pd.DataFrame:
     return shown
 
 
+def render_model_comparison() -> None:
+    """Backtest comparison of the models, read from ``reports/metrics.json``."""
+    st.subheader("Model comparison (backtest)")
+    try:
+        metrics = load_model_comparison()
+    except ValueError as exc:
+        st.warning(f"The backtest summary could not be read: {exc}")
+        return
+    if metrics is None:
+        st.info(
+            f"No backtest summary found at {METRICS_FILE}. Run `make evaluate-full` to create "
+            "it with the hybrid, XGBoost and SARIMA (`make evaluate` adds only the baselines)."
+        )
+        return
+    updated = date.fromtimestamp(METRICS_FILE.stat().st_mtime)
+    st.caption(
+        "RMSE divided by the random walk's RMSE: below 1 beats the random walk. "
+        f"Source: {METRICS_FILE}, updated {updated:%Y-%m-%d}."
+    )
+    for target in ("y_fx", "y_cash"):
+        table = comparison_table(metrics, target)
+        if table.empty:
+            continue
+        st.markdown(f"**{TARGET_LABELS[target]}**")
+        st.dataframe(table)
+
+
 def main() -> None:
     """Render the dashboard."""
     st.set_page_config(page_title="FX hedging forecast", layout="wide")
@@ -151,6 +182,8 @@ def main() -> None:
         "bank spread and fixed fee from configs/business.yaml; "
         "exogenous variables held at their last known value."
     )
+
+    render_model_comparison()
 
 
 if __name__ == "__main__":
