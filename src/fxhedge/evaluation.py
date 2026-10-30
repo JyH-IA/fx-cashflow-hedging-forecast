@@ -154,15 +154,19 @@ def default_forecasters(target: str) -> dict[str, Forecaster]:
 def model_forecasters(
     master: pd.DataFrame, target: Target, cfg: TrainingConfig
 ) -> dict[str, Forecaster]:
-    """Forecasters for the trained model families: Prophet+LightGBM hybrid and XGBoost.
+    """Forecasters for the trained model families: base + LightGBM hybrid and XGBoost.
 
-    Each forecaster refits on every backtest fold, so this is slow. The import is local
-    because ``model_training`` imports this module.
+    The hybrid runs the validation gate on every fold, so a fold whose residual tree does
+    not help is forecast with the base model alone (Prophet for ``y_cash``, the last value
+    for ``y_fx``). Each forecaster refits on every backtest fold, so this is slow. The
+    import is local because ``model_training`` imports this module.
     """
-    from fxhedge.model_training import make_model_forecaster
+    from fxhedge.model_training import fit_lightgbm_fixed, make_model_forecaster
 
     return {
-        "hybrid": make_model_forecaster(master, target, cfg, "hybrid"),
+        "hybrid": make_model_forecaster(
+            master, target, cfg, "hybrid", gate_fitter=fit_lightgbm_fixed
+        ),
         "xgboost": make_model_forecaster(master, target, cfg, "xgboost"),
     }
 
@@ -310,7 +314,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--with-models",
         action="store_true",
-        help="Also backtest the Prophet+LightGBM hybrid and XGBoost (refits per fold; slow).",
+        help=(
+            "Also backtest the base + LightGBM hybrid (with the validation gate) and "
+            "XGBoost (refits per fold; slow)."
+        ),
     )
     parser.add_argument(
         "--min-train",

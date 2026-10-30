@@ -73,6 +73,11 @@ class TrainingConfig(_FrozenModel):
     model learns from. With enough rows, the residuals come from blocks of
     ``residual_test_size`` days, close to the forecast horizon. With fewer rows than
     ``residual_min_splits`` such blocks, the older split by ``n_splits`` is used.
+
+    The ``gate_*`` fields control the validation gate. The last ``gate_holdout_fraction`` of
+    the residuals is kept for validation; the tree is used only if it lowers the holdout
+    error by more than ``gate_min_improvement`` (a fraction) compared with the base model
+    alone.
     """
 
     horizons: list[int] = Field(default_factory=lambda: [30, 60, 90])
@@ -87,6 +92,8 @@ class TrainingConfig(_FrozenModel):
     residual_min_train: int = Field(365, ge=30)
     residual_min_splits: int = Field(7, ge=2)
     residual_max_splits: int = Field(12, ge=2)
+    gate_holdout_fraction: float = Field(0.25, gt=0.0, lt=0.5)
+    gate_min_improvement: float = Field(0.0, ge=0.0, lt=1.0)
 
 
 class MonitoringConfig(_FrozenModel):
