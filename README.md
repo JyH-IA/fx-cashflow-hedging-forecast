@@ -26,7 +26,7 @@ The figures come from a local `make evaluate-full` run on 2026-10-30, with five 
 | Cash-in (`y_cash`) | Hybrid (Prophet base) | 0.49 | 0.42 | 0.38 |
 | Cash-in (`y_cash`) | Seasonal naive (365 days) | 0.63 | 0.57 | 0.53 |
 | Cash-in (`y_cash`) | SARIMA | 0.76 | 0.80 | 0.88 |
-| Cash-in (`y_cash`) | XGBoost | 0.80 | 0.83 | 0.87 |
+| Cash-in (`y_cash`) | XGBoost | 0.79 | 0.83 | 0.87 |
 | USD/MXN (`y_fx`) | XGBoost | 0.89 | 0.92 | 0.95 |
 | USD/MXN (`y_fx`) | SARIMA | 1.01 | 1.01 | 1.00 |
 | USD/MXN (`y_fx`) | Seasonal naive (7 days) | 1.02 | 1.01 | 1.03 |
