@@ -19,6 +19,7 @@ All notable changes to this project are documented here. The format follows
 - The gate scores the tree with exogenous features frozen at the forecast origin, as at inference time (`frozen_holdout_features`).
 - Random-walk base (`LastValueBase`) with its own JSON artifact. `metadata.json` now records `base_model`, `residual_model` and the gate result.
 - `evaluate-full` runs the gate on every backtest fold, and `explain` skips SHAP for a target whose tree was rejected.
+- The dashboard shows a notice for each target whose forecast comes from the base model alone because the gate rejected its tree (`base_only_notices`).
 
 ### Changed
 
@@ -31,4 +32,4 @@ All notable changes to this project are documented here. The format follows
 - The Docker base image is not pinned by digest.
 - The hybrid model carries exogenous variables forward over the horizon.
 - The gate uses a single validation window and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize. Only rejections are logged.
-- When the gate rejects the tree, the forecast of that target ignores the scenario shocks.
+- When the gate rejects the tree, the forecast of that target ignores the scenario shocks. The dashboard shows a notice about it.

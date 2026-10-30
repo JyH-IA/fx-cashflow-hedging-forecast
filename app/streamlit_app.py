@@ -16,6 +16,7 @@ from fxhedge.api_models import DISCLAIMER, HORIZONS
 from fxhedge.config import BusinessConfig, load_settings, load_yaml_model
 from fxhedge.dashboard import (
     DEFAULT_RATIOS,
+    base_only_notices,
     commission_saving_mxn,
     forecast_summary,
     format_mxn,
@@ -38,6 +39,12 @@ def load_forecast(horizon: int, scenario: str, run_date: date) -> tuple[pd.DataF
     )
     known = history.loc[history["date"] <= pd.Timestamp(run_date), "y_fx"]
     return frame, float(known.iloc[-1])
+
+
+@st.cache_data(ttl=3600)
+def load_notices() -> list[str]:
+    """Notices for the targets whose forecast comes from the base model alone."""
+    return base_only_notices(load_models(load_settings().models_dir))
 
 
 def forecast_chart(frame: pd.DataFrame) -> go.Figure:
@@ -101,6 +108,9 @@ def main() -> None:
         )
         st.caption(f"Reason: {type(exc).__name__}")
         st.stop()
+
+    for notice in load_notices():
+        st.info(notice)
 
     business = load_yaml_model(load_settings().configs_dir / "business.yaml", BusinessConfig)
     summary = forecast_summary(frame, spot)
