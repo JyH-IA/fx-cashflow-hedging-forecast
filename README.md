@@ -17,6 +17,32 @@ A hospitality group that sells in USD but pays most of its costs in MXN (82 % in
 
 Proyecto educativo que pronostica el tipo de cambio USD/MXN y el flujo de caja en USD a 30, 60 y 90 días para apoyar decisiones de cobertura con forwards. Los datos internos son sintéticos y la empresa es ficticia. Combina una base (Prophet para el flujo de caja y un *random walk* para el tipo de cambio) con LightGBM sobre sus residuos, protegido por una compuerta de validación. Compara el resultado con *baselines* (incluido el *random walk*), simula históricamente la cobertura y expone los resultados en un panel de Streamlit y en una API. No es asesoría financiera.
 
+## Results and lessons
+
+The figures come from a local `make evaluate-full` run on 2026-10-30, with five rolling origins. Each value is the model's RMSE divided by the random walk's RMSE, so a value below 1 beats the random walk. They depend on the data in use: regenerate them with `make evaluate-full` and read `reports/backtest.md`.
+
+| Target | Model | 30 days | 60 days | 90 days |
+|---|---|---|---|---|
+| Cash-in (`y_cash`) | Hybrid (Prophet base) | 0.49 | 0.42 | 0.38 |
+| Cash-in (`y_cash`) | Seasonal naive (365 days) | 0.63 | 0.57 | 0.53 |
+| Cash-in (`y_cash`) | SARIMA | 0.76 | 0.80 | 0.88 |
+| Cash-in (`y_cash`) | XGBoost | 0.80 | 0.83 | 0.87 |
+| USD/MXN (`y_fx`) | XGBoost | 0.89 | 0.92 | 0.95 |
+| USD/MXN (`y_fx`) | SARIMA | 1.01 | 1.01 | 1.00 |
+| USD/MXN (`y_fx`) | Seasonal naive (7 days) | 1.02 | 1.01 | 1.03 |
+| USD/MXN (`y_fx`) | Hybrid (random-walk base) | 1.56 | 1.27 | 1.15 |
+
+- **Cash-in.** The hybrid is the best model at every horizon and beats the seasonal naive baseline. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
+- **Exchange rate.** No model clearly beats the random walk. XGBoost is 5 % to 11 % better, SARIMA and the seasonal naive tie with it, and the hybrid is worse. The reports state this as it is, because exchange rates behave close to a random walk.
+
+What the iterations taught:
+
+- **A residual model can hurt.** In the diagnostic, the LightGBM correction made the exchange-rate forecast worse in 3 of 5 origins. A validation gate now keeps the tree only when it lowers the error on recent residuals.
+- **Validate the way you will predict.** The first gate used the true exogenous values of each day, but forecasts hold them at their last known value. Scoring with the values frozen at the forecast origin removed that optimism.
+- **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base. The hybrid's ratio for the exchange rate moved from 2.16, 1.65 and 1.81 to the figures above.
+- **Removing the tree helped cash-in.** Once the gate rejected the residual tree for cash-in, its ratio improved from 0.67, 0.56 and 0.49 to the figures above.
+- **The gate is not perfect.** It uses one validation window and a zero minimum improvement, so the exchange-rate hybrid still accepts a harmful tree in some folds. See the limitations below.
+
 ## Quick start
 
 ```bash
