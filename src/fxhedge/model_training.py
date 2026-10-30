@@ -6,6 +6,8 @@ with a time-series split, so the residual model never learns from in-sample fits
 
 An optional validation gate keeps the residual model only if it lowers the error on a
 holdout of the most recent residuals; otherwise the hybrid falls back to Prophet alone.
+The gate scores the tree with exogenous features frozen at the forecast origin, exactly as
+they are at inference time, because the real values of the future are not known.
 
 Future exogenous values are held at their last known value (carry-forward). Target-derived
 lag and rolling columns are excluded from the model features because they are not known
@@ -356,8 +358,44 @@ def _prepare(df: pd.DataFrame, target: Target) -> tuple[pd.DataFrame, pd.Series,
     return data, series, select_feature_columns(data.reset_index())
 
 
+def frozen_holdout_features(
+    source: pd.DataFrame, index: pd.DatetimeIndex, block: int
+) -> pd.DataFrame:
+    """Features of ``index`` as a forecaster would see them, with exogenous values frozen.
+
+    The rows are split into consecutive blocks of ``block`` rows. Every non-calendar column
+    takes, for the whole block, the value that ``source`` had on the day before the block
+    starts (the forecast origin). Calendar columns keep their true values because they are
+    known in advance. This is the same carry-forward rule that ``future_feature_frame``
+    applies at inference time.
+
+    Raises:
+        ValueError: if ``block`` is not positive.
+    """
+    if block < 1:
+        raise ValueError("block must be positive")
+    calendar = set(add_calendar_features(pd.DataFrame({"date": index})).columns)
+    carried = [column for column in source.columns if column not in calendar]
+    frozen = source.loc[index].copy()
+    if not carried:
+        return frozen
+    positions = source.index.get_indexer(index)
+    carried_set = set(carried)
+    columns = [i for i, name in enumerate(frozen.columns) if name in carried_set]
+    for start in range(0, len(index), block):
+        stop = min(start + block, len(index))
+        origin = max(int(positions[start]) - 1, 0)
+        origin_values = source.iloc[origin][carried].to_numpy(dtype=np.float64)
+        frozen.iloc[start:stop, columns] = np.tile(origin_values, (stop - start, 1))
+    return frozen
+
+
 def evaluate_gate(
-    features: pd.DataFrame, residuals: pd.Series, cfg: TrainingConfig, fitter: TreeFitter
+    features: pd.DataFrame,
+    residuals: pd.Series,
+    cfg: TrainingConfig,
+    fitter: TreeFitter,
+    carry_source: pd.DataFrame | None = None,
 ) -> GateResult:
     """Decide whether a residual tree helps, using the most recent residuals as holdout.
 
@@ -365,6 +403,10 @@ def evaluate_gate(
     predictions are compared with the holdout residuals. Using only the base model means
     predicting a residual of zero, so the tree is kept only when its holdout RMSE is lower
     than that of the residuals themselves by more than ``cfg.gate_min_improvement``.
+
+    When ``carry_source`` (the full feature table) is given, the holdout features are
+    frozen at the start of each ``cfg.residual_test_size`` block, as at inference time;
+    otherwise the true feature values are used, which is optimistic.
 
     With fewer than ``MIN_GATE_TRAIN_ROWS`` rows left for fitting, the tree cannot be
     validated and is rejected.
@@ -375,8 +417,13 @@ def evaluate_gate(
     if train_rows < MIN_GATE_TRAIN_ROWS:
         return GateResult(False, float("nan"), float("nan"), holdout)
     tree, _ = fitter(features.iloc[:train_rows], residuals.iloc[:train_rows], cfg)
+    holdout_features = features.iloc[total - holdout :]
+    if carry_source is not None:
+        holdout_features = frozen_holdout_features(
+            carry_source, pd.DatetimeIndex(holdout_features.index), cfg.residual_test_size
+        )
     actual = residuals.iloc[total - holdout :].to_numpy(dtype=np.float64)
-    predicted = tree.predict(features.iloc[total - holdout :])
+    predicted = tree.predict(holdout_features)
     rmse_base = float(np.sqrt(np.mean(actual**2)))
     rmse_hybrid = float(np.sqrt(np.mean((actual - predicted) ** 2)))
     use_tree = rmse_hybrid < rmse_base * (1.0 - cfg.gate_min_improvement)
@@ -393,14 +440,19 @@ def fit_hybrid(
 ) -> TrainedModel:
     """Fit the Prophet + tree hybrid for ``target``.
 
-    When ``gate_fitter`` is given, a validation gate runs first (see ``evaluate_gate``).
-    If it rejects the tree, the model keeps Prophet alone and ``residual_fitter`` is not
-    called. Without ``gate_fitter`` the tree is always fitted.
+    When ``gate_fitter`` is given, a validation gate runs first (see ``evaluate_gate``) with
+    exogenous features frozen at each block origin. If it rejects the tree, the model keeps
+    Prophet alone and ``residual_fitter`` is not called. Without ``gate_fitter`` the tree is
+    always fitted.
     """
     data, series, columns = _prepare(df, target)
     residuals = oos_residuals(series, base_fitter, cfg)
     features = data.loc[residuals.index, columns]
-    gate = evaluate_gate(features, residuals, cfg, gate_fitter) if gate_fitter else None
+    gate = (
+        evaluate_gate(features, residuals, cfg, gate_fitter, carry_source=data[columns])
+        if gate_fitter
+        else None
+    )
     tree: Predictor
     params: Params
     if gate is not None and not gate.use_tree:
