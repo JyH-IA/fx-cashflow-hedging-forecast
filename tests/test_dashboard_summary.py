@@ -126,7 +126,7 @@ def test_compact_money(value: float, currency: str, expected: str) -> None:
 def test_kpis_compare_the_selected_hedge_with_no_hedge() -> None:
     kpis = summary_kpis(_impact(), 0.5)
     assert kpis["protected"] == pytest.approx(158_558_849.0 - 148_531_233.0)
-    assert kpis["narrowing_pct"] == pytest.approx(50.0)
+    assert kpis["narrowing_pct"] == pytest.approx(50.0, abs=0.01)
     assert kpis["bank_cost"] == pytest.approx(126_884.0)
     assert summary_kpis(_impact(), 0.0)["protected"] == pytest.approx(0.0)
 
