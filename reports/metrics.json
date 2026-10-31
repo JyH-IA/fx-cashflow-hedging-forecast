@@ -1,0 +1,272 @@
+[
+  {
+    "target": "y_cash",
+    "model": "hybrid",
+    "horizon": 30,
+    "mape": 8.563798848998596,
+    "rmse": 11222.927884033841,
+    "mae": 9123.381237600113,
+    "rmse_vs_random_walk": 0.5710965888504578
+  },
+  {
+    "target": "y_cash",
+    "model": "hybrid",
+    "horizon": 60,
+    "mape": 9.013967014109722,
+    "rmse": 11533.531207431919,
+    "mae": 9376.10585344282,
+    "rmse_vs_random_walk": 0.43101637872194043
+  },
+  {
+    "target": "y_cash",
+    "model": "hybrid",
+    "horizon": 90,
+    "mape": 8.71037998784257,
+    "rmse": 11594.200172227622,
+    "mae": 9366.53885395565,
+    "rmse_vs_random_walk": 0.38419983514739964
+  },
+  {
+    "target": "y_cash",
+    "model": "random_walk",
+    "horizon": 30,
+    "mape": 17.56048910931144,
+    "rmse": 19651.540743088866,
+    "mae": 16910.297716428322,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_cash",
+    "model": "random_walk",
+    "horizon": 60,
+    "mape": 24.746170731733944,
+    "rmse": 26758.916312255715,
+    "mae": 23592.14712348849,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_cash",
+    "model": "random_walk",
+    "horizon": 90,
+    "mape": 26.095052467353888,
+    "rmse": 30177.525109503145,
+    "mae": 26761.490358473005,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_cash",
+    "model": "sarima",
+    "horizon": 30,
+    "mape": 15.128770199696891,
+    "rmse": 18105.479045858192,
+    "mae": 15313.368789355922,
+    "rmse_vs_random_walk": 0.9213261841683126
+  },
+  {
+    "target": "y_cash",
+    "model": "sarima",
+    "horizon": 60,
+    "mape": 22.75094559089596,
+    "rmse": 25132.054320787323,
+    "mae": 21870.274912965822,
+    "rmse_vs_random_walk": 0.9392029941540166
+  },
+  {
+    "target": "y_cash",
+    "model": "sarima",
+    "horizon": 90,
+    "mape": 24.36903637654362,
+    "rmse": 28625.626398543438,
+    "mae": 25079.812474901697,
+    "rmse_vs_random_walk": 0.948574354413477
+  },
+  {
+    "target": "y_cash",
+    "model": "seasonal_naive_365",
+    "horizon": 30,
+    "mape": 11.78469003309969,
+    "rmse": 16276.659834589567,
+    "mae": 13252.027971661202,
+    "rmse_vs_random_walk": 0.828263801163469
+  },
+  {
+    "target": "y_cash",
+    "model": "seasonal_naive_365",
+    "horizon": 60,
+    "mape": 12.094643476552132,
+    "rmse": 16729.90008522118,
+    "mae": 13440.403819144907,
+    "rmse_vs_random_walk": 0.6252084310887733
+  },
+  {
+    "target": "y_cash",
+    "model": "seasonal_naive_365",
+    "horizon": 90,
+    "mape": 11.93282887435802,
+    "rmse": 16783.657516279076,
+    "mae": 13496.436480370621,
+    "rmse_vs_random_walk": 0.5561641471716899
+  },
+  {
+    "target": "y_cash",
+    "model": "xgboost",
+    "horizon": 30,
+    "mape": 12.21898177327732,
+    "rmse": 15356.620134406508,
+    "mae": 12730.260516645074,
+    "rmse_vs_random_walk": 0.7814461133184779
+  },
+  {
+    "target": "y_cash",
+    "model": "xgboost",
+    "horizon": 60,
+    "mape": 13.557946488569854,
+    "rmse": 16776.097596735268,
+    "mae": 13916.515041285715,
+    "rmse_vs_random_walk": 0.6269348654097675
+  },
+  {
+    "target": "y_cash",
+    "model": "xgboost",
+    "horizon": 90,
+    "mape": 13.374555455358637,
+    "rmse": 17268.100004554803,
+    "mae": 14352.342634804798,
+    "rmse_vs_random_walk": 0.5722172359030508
+  },
+  {
+    "target": "y_fx",
+    "model": "hybrid",
+    "horizon": 30,
+    "mape": 1.67798300863382,
+    "rmse": 0.33515649436443556,
+    "mae": 0.310931333333333,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_fx",
+    "model": "hybrid",
+    "horizon": 60,
+    "mape": 1.563326098386894,
+    "rmse": 0.34290623835089773,
+    "mae": 0.28913466666666626,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_fx",
+    "model": "hybrid",
+    "horizon": 90,
+    "mape": 1.980924644769092,
+    "rmse": 0.4550634736736649,
+    "mae": 0.3674706666666661,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_fx",
+    "model": "random_walk",
+    "horizon": 30,
+    "mape": 1.67798300863382,
+    "rmse": 0.33515649436443556,
+    "mae": 0.310931333333333,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_fx",
+    "model": "random_walk",
+    "horizon": 60,
+    "mape": 1.563326098386894,
+    "rmse": 0.34290623835089773,
+    "mae": 0.28913466666666626,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_fx",
+    "model": "random_walk",
+    "horizon": 90,
+    "mape": 1.980924644769092,
+    "rmse": 0.4550634736736649,
+    "mae": 0.3674706666666661,
+    "rmse_vs_random_walk": 1.0
+  },
+  {
+    "target": "y_fx",
+    "model": "sarima",
+    "horizon": 30,
+    "mape": 1.6732562190854057,
+    "rmse": 0.3342194982553914,
+    "mae": 0.3100279364086934,
+    "rmse_vs_random_walk": 0.9972043026920274
+  },
+  {
+    "target": "y_fx",
+    "model": "sarima",
+    "horizon": 60,
+    "mape": 1.5591209007997748,
+    "rmse": 0.34200531389397704,
+    "mae": 0.28832830748925653,
+    "rmse_vs_random_walk": 0.9973726798869177
+  },
+  {
+    "target": "y_fx",
+    "model": "sarima",
+    "horizon": 90,
+    "mape": 1.9781087765680518,
+    "rmse": 0.45464508505067724,
+    "mae": 0.3669155313632255,
+    "rmse_vs_random_walk": 0.9990805928245349
+  },
+  {
+    "target": "y_fx",
+    "model": "seasonal_naive_7",
+    "horizon": 30,
+    "mape": 1.5350197886825852,
+    "rmse": 0.3073786287464373,
+    "mae": 0.2790746666666665,
+    "rmse_vs_random_walk": 0.9171197154610593
+  },
+  {
+    "target": "y_fx",
+    "model": "seasonal_naive_7",
+    "horizon": 60,
+    "mape": 1.535053558188731,
+    "rmse": 0.3265086274267205,
+    "mae": 0.28122333333333316,
+    "rmse_vs_random_walk": 0.9521804823294072
+  },
+  {
+    "target": "y_fx",
+    "model": "seasonal_naive_7",
+    "horizon": 90,
+    "mape": 1.9265499668010873,
+    "rmse": 0.4324391140088327,
+    "mae": 0.35518466666666654,
+    "rmse_vs_random_walk": 0.9502830682449883
+  },
+  {
+    "target": "y_fx",
+    "model": "xgboost",
+    "horizon": 30,
+    "mape": 1.609813313246662,
+    "rmse": 0.3201313132092342,
+    "mae": 0.2942471006062824,
+    "rmse_vs_random_walk": 0.9551696553465452
+  },
+  {
+    "target": "y_fx",
+    "model": "xgboost",
+    "horizon": 60,
+    "mape": 1.5746731558345286,
+    "rmse": 0.3383699772746326,
+    "mae": 0.28939555613199863,
+    "rmse_vs_random_walk": 0.9867711328377083
+  },
+  {
+    "target": "y_fx",
+    "model": "xgboost",
+    "horizon": 90,
+    "mape": 1.9220869919487622,
+    "rmse": 0.43322803255191145,
+    "mae": 0.3547441721937391,
+    "rmse_vs_random_walk": 0.9520167133048958
+  }
+]
