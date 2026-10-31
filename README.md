@@ -19,29 +19,30 @@ Proyecto educativo que pronostica el tipo de cambio USD/MXN y el flujo de caja e
 
 ## Results and lessons
 
-The figures come from a local `make evaluate-full` run on 2026-10-30, with five rolling origins. Each value is the model's RMSE divided by the random walk's RMSE, so a value below 1 beats the random walk. They depend on the data in use: regenerate them with `make evaluate-full` and read `reports/backtest.md`.
+The figures come from a local `make evaluate-full` run on 2026-10-31, with five rolling origins. The USD/MXN series is real market data from Banxico (the FIX rate, with Yahoo Finance as a fallback) from 2020-01-01 to 2026-10-30, and the macro inputs come from Banxico and FRED. The internal sales and cash-in are synthetic. The manual SECTUR file was not provided, so `cancun_arrivals` is left out. Each value is the model's RMSE divided by the random walk's RMSE, so a value below 1 beats the random walk. They depend on the data in use: regenerate them with `make evaluate-full` and read `reports/backtest.md`.
 
 | Target | Model | 30 days | 60 days | 90 days |
 |---|---|---|---|---|
-| Cash-in (`y_cash`) | Hybrid (Prophet base) | 0.49 | 0.42 | 0.38 |
-| Cash-in (`y_cash`) | Seasonal naive (365 days) | 0.63 | 0.57 | 0.53 |
-| Cash-in (`y_cash`) | SARIMA | 0.76 | 0.80 | 0.88 |
-| Cash-in (`y_cash`) | XGBoost | 0.79 | 0.83 | 0.87 |
-| USD/MXN (`y_fx`) | XGBoost | 0.89 | 0.92 | 0.95 |
-| USD/MXN (`y_fx`) | SARIMA | 1.01 | 1.01 | 1.00 |
-| USD/MXN (`y_fx`) | Seasonal naive (7 days) | 1.02 | 1.01 | 1.03 |
-| USD/MXN (`y_fx`) | Hybrid (random-walk base) | 1.56 | 1.27 | 1.15 |
+| Cash-in (`y_cash`) | Hybrid (Prophet base) | 0.603 | 0.443 | 0.386 |
+| Cash-in (`y_cash`) | Seasonal naive (365 days) | 0.814 | 0.635 | 0.558 |
+| Cash-in (`y_cash`) | XGBoost | 0.834 | 0.672 | 0.600 |
+| Cash-in (`y_cash`) | SARIMA | 0.927 | 0.952 | 0.959 |
+| USD/MXN (`y_fx`) | Seasonal naive (7 days) | 0.917 | 0.952 | 0.950 |
+| USD/MXN (`y_fx`) | XGBoost | 0.955 | 0.987 | 0.952 |
+| USD/MXN (`y_fx`) | SARIMA | 0.997 | 0.997 | 0.999 |
+| USD/MXN (`y_fx`) | Hybrid (random-walk base) | 1.000 | 1.000 | 1.000 |
 
-- **Cash-in.** The hybrid is the best model at every horizon and beats the seasonal naive baseline. The gate rejected the residual tree in all five folds, so the hybrid is Prophet alone. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
-- **Exchange rate.** No model clearly beats the random walk. XGBoost is 5 % to 11 % better, SARIMA and the seasonal naive tie with it, and the hybrid is worse. The reports state this as it is, because exchange rates behave close to a random walk.
+- **Cash-in.** The hybrid is the best model at every horizon, with 26 % to 31 % less error than the seasonal naive baseline. The validation gate rejected the residual tree, so the hybrid is Prophet alone. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
+- **Exchange rate.** No model clearly beats the random walk. The seasonal naive (7 days) is 5 % to 8 % better and XGBoost 1 % to 5 % better, but gaps this small over five origins should not be read as a real edge. SARIMA ties the random walk. The hybrid matches it exactly (ratio 1.000 with identical errors), which means the gate rejected the residual tree and its forecast is the last observed value. The reports state this as it is, because exchange rates behave close to a random walk.
 
-What the iterations taught:
+What the iterations taught (the figures in the next four points were measured on the synthetic series of `make demo`, before the switch to real data):
 
 - **A residual model can hurt.** In the diagnostic, the LightGBM correction made the exchange-rate forecast worse in 3 of 5 origins. A validation gate now keeps the tree only when it lowers the error on recent residuals.
 - **Validate the way you will predict.** The first gate used the true exogenous values of each day, but forecasts hold them at their last known value. Scoring with the values frozen at the forecast origin removed that optimism.
-- **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base. The hybrid's ratio for the exchange rate moved from 2.16, 1.65 and 1.81 to the figures above.
-- **Removing the tree helped cash-in.** Once the gate rejected the residual tree for cash-in, its ratio improved from 0.67, 0.56 and 0.49 to the figures above.
-- **The gate is not perfect.** It uses one validation window and a zero minimum improvement. In the last backtest it logged a rejection of the exchange-rate tree in only 3 of the 5 folds, so it kept the tree in the other 2. A random-walk base with a rejected tree would match the random walk exactly, and the hybrid still trails it, so those two trees most likely hurt. See the limitations below.
+- **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base. The hybrid's ratio for the exchange rate moved from 2.16, 1.65 and 1.81 to 1.56, 1.27 and 1.15 on that series.
+- **Removing the tree helped cash-in.** Once the gate rejected the residual tree for cash-in, its ratio improved from 0.67, 0.56 and 0.49 to 0.49, 0.42 and 0.38 on that series.
+- **Real data changes the numbers, not the conclusion.** With Banxico data the exchange-rate hybrid ties the random walk instead of trailing it, and the cash-in ratios rise to the values in the table because the macro inputs are now real and `cancun_arrivals` is missing. The exchange rate is still not predictable with these models.
+- **The gate is not perfect.** It uses one validation window and a zero minimum improvement. On the synthetic series it logged a rejection of the exchange-rate tree in only 3 of the 5 folds, so it kept the tree in the other 2, and the hybrid trailed the random walk. The per-fold decisions of the real-data run are in the log of `make evaluate-full`. See the limitations below.
 
 ## Quick start
 
@@ -111,7 +112,7 @@ docs/          architecture, contracts, finance, open questions
 - CI runs ruff, `mypy --strict`, the tests (at least 80 % coverage), a secret scan and the Docker build. The dependency audit is advisory because new advisories can appear at any time.
 - A target of MAPE below 2 % at 90 days is not used as a success criterion: exchange rates behave close to a random walk, so the honest benchmark is the random walk itself.
 - When the gate rejects the tree for a target, its forecast comes from the base alone. The scenarios (plus or minus 10 %) shock only the model features, so they do not move that forecast.
-- The gate uses a single validation window (about three blocks of 90 days) and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize. In the last backtest the exchange-rate tree was kept in 2 of 5 folds and the hybrid still trails the random walk; read `reports/backtest.md` for the current numbers.
+- The gate uses a single validation window (about three blocks of 90 days) and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize. On the synthetic series the exchange-rate tree was kept in 2 of 5 folds and the hybrid trailed the random walk; with real data the hybrid ties it. Read `reports/backtest.md` for the current numbers.
 - The hedging simulation assumes the next month's USD inflow is known when the hedge is placed, to isolate FX risk. It is a historical simulation, not an A/B test.
 - MLflow tracking, a Java client example and a hashed `requirements.lock` are not implemented. See [open questions](docs/open_questions.md) for the full list of items to verify.
 
