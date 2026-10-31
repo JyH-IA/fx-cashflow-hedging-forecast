@@ -9,6 +9,7 @@ Last reviewed on 2026-10-31. Items marked `TODO(verify)` in the code and configu
 - `make demo` ran on a developer machine.
 - Ingestion with a real Banxico token works: the URL template and the shape of the JSON response are correct, and the Yahoo Finance fallback is available. It ran on 2026-10-31.
 - Series IDs: `SF43718` (FIX) and `SF60633` (28-day CETES) were checked against Banxico's documentation, and `DFF` against FRED. `SF43783`, used before for `cetes_28d`, is the 28-day TIIE and was replaced.
+- After the real-data training of 2026-10-31, `make explain` reported that the gate disabled the residual model for both targets, so there is nothing to explain with SHAP. An older `reports/shap_drivers.md` had listed drivers of a `y_fx` residual model from a previous run; run `make explain` after every `make train` to keep the file current.
 
 ## Series and data still to check
 
@@ -21,7 +22,6 @@ Last reviewed on 2026-10-31. Items marked `TODO(verify)` in the code and configu
 ## Gate, base model and backtest
 
 - In the real-data run (2026-10-31) the gate rejected the residual tree for both targets in the stored models: `y_fx` repeats the last observed value and `y_cash` is Prophet alone. The dashboard's Technical details tab shows this. The backtest agrees for `y_fx`: its hybrid equals the random walk (ratio 1.000 with identical errors).
-- `reports/shap_drivers.md` can be stale: it listed drivers of a `y_fx` residual model after training had rejected that tree. Run `make explain` after every `make train`; it should report that there is nothing to explain for both targets.
 - On the synthetic series the log showed a gate rejection for `y_fx` in 3 of 5 folds, so the tree was kept in the other 2 and the hybrid ended above the random walk. Only rejections are logged, so the validation errors of the kept trees are unknown; logging every gate decision is not done.
 - The backtest has five origins (`n_splits: 5`) and no confidence intervals or significance test. Gaps of a few percent against the random walk, such as the seasonal naive (7 days) at 0.917 to 0.952, cannot be told from chance. More origins and the error of each origin would allow an interval; this is not done.
 - The gate uses one validation window of about 270 rows (three blocks of 90 days) and `gate_min_improvement` is 0, so a small, noisy gain is enough to keep a tree. A margin such as 0.10 has not been tested.
