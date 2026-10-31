@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from fxhedge.config import SimulatorConfig, load_settings, load_yaml_model
+from fxhedge.data_source import write_data_source
 from fxhedge.io_utils import write_csv
 from fxhedge.schemas import MACRO_SPEC, validate_frame
 from fxhedge.simulator import simulate_internal_sales
@@ -89,6 +90,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     write_csv(simulate_macro(start, end, settings.seed), args.out_dir / "macro_data.csv")
     sales = simulate_internal_sales(sim_cfg, start, end, settings.seed)
     write_csv(sales, args.out_dir / "internal_sales_simulated.csv")
+    write_data_source(args.out_dir, "synthetic")
     logger.warning("Wrote SYNTHETIC data to %s (not real market data)", args.out_dir)
     return 0
 

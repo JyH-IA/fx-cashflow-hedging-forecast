@@ -25,6 +25,7 @@ from fxhedge.config import (
     load_settings,
     load_yaml_model,
 )
+from fxhedge.data_source import write_data_source
 from fxhedge.io_utils import read_csv_with_date, write_csv
 from fxhedge.schemas import MACRO_SPEC, SALES_SPEC, validate_frame
 from fxhedge.simulator import simulate_internal_sales
@@ -323,6 +324,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.error("Macro ingestion failed: %s", exc)
         return 1
     write_csv(macro, raw_dir / "macro_data.csv")
+    write_data_source(raw_dir, "banxico")
     return 0
 
 
