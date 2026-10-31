@@ -54,7 +54,25 @@ make app      # dashboard at http://127.0.0.1:8501
 
 `make demo` needs no token and no network. The exchange-rate series it generates is an invented random walk, so its results only demonstrate that the pipeline runs; they say nothing about the real market. Training tunes LightGBM with Optuna and can take a few minutes; lower `optuna_trials` in `configs/training.yaml` to speed it up.
 
-**Real data.** Copy `.env.example` to `.env`, set `BANXICO_TOKEN`, place the manual CSVs `data/external/sectur_arribos.csv` (columns `month`, `cancun_arrivals`) and `data/external/fed_funds.csv` (FRED format) and run `make ingest`. Verify the series IDs in `configs/series.yaml` first.
+**Real data.** The pipeline can use real exchange-rate and macro series instead of the synthetic ones.
+
+1. Request a token for the [Banxico SIE API](https://www.banxico.org.mx/SieAPIRest/service/v1/token), copy `.env.example` to `.env` and set `BANXICO_TOKEN`. `.env` is git-ignored: never commit it.
+2. Comment out `DB_URL` in `.env` unless a PostgreSQL server is running (`make db-up`). With `DB_URL` set, `make ingest` also stores the simulated sales in that database and stops if it cannot connect.
+3. Download the effective federal funds rate (series `DFF`) from FRED as a CSV and save it as `data/external/fed_funds.csv`. The SECTUR file `data/external/sectur_arribos.csv` (columns `month`, `cancun_arrivals`) is optional: without it, `cancun_arrivals` is left out.
+4. Run the pipeline. `make ingest` stops at the end date of `configs/simulator.yaml`, so pass `--end` to bring the data up to date (it also extends the synthetic sales to that date):
+
+```bash
+python -m fxhedge.data_ingestion --end 2026-10-30
+make features train evaluate-full hedge
+make app
+```
+
+Notes:
+
+- The series IDs in `configs/series.yaml` for the FIX rate (`SF43718`) and the 28-day CETES (`SF60633`) were checked against Banxico's documentation. `SP1` (INPC) still needs checking.
+- Ingestion writes `data/raw/data_source.txt` (`banxico`), `make features` copies it to `data/processed/`, and the dashboard shows the source and the date of the last observation under the title.
+- Do not run `make sample` after ingesting: it overwrites the raw files with synthetic data.
+- `rate_mxn_pct` and `rate_usd_pct` in `configs/business.yaml` set the forward rate. They are illustrative and were set to 6.22 % and 3.88 % in October 2026; update them when you refresh the data.
 
 **API and Docker.**
 
