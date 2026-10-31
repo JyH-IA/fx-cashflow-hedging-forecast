@@ -19,7 +19,7 @@ make demo           # synthetic data -> features -> models -> evaluation (no tok
 
 ## Code style
 
-- Python 3.11 or 3.12 (CI runs 3.11), full type annotations, and docstrings with the raised errors.
+- Python 3.11 or 3.12 (CI runs both), full type annotations, and docstrings with the raised errors.
 - Pure functions where possible; keep network, disk and database access at the edges.
 - Configuration lives in `configs/*.yaml` and is validated with pydantic.
 

@@ -11,7 +11,7 @@ A hospitality group that sells in USD but pays most of its costs in MXN (82 % in
 - **Models:** a hybrid that adds LightGBM, trained on out-of-sample residuals, to a base forecast (Prophet for cash-in, a random walk for the exchange rate). A validation gate keeps the LightGBM part only when it helps. The hybrid is compared with XGBoost, SARIMA, a random walk and a seasonal naive baseline.
 - **Honest evaluation:** rolling-origin backtesting with MAPE, RMSE and MAE per horizon. The key figure is `rmse_vs_random_walk`: below 1 means the model beats a random walk. For exchange rates that is hard, and the reports say so when it happens.
 - **Decision support:** covered-interest-parity forwards, a historical hedging simulation with a block bootstrap, a Streamlit dashboard for finance leaders and a FastAPI service.
-- **Engineering:** typed Python (tested in CI on 3.11 and also run locally on 3.12) checked with `mypy --strict`, data contracts, tests with an 80 % coverage gate, CI (lint, types, tests, secret scan, dependency audit, Docker build) and SHA-256 integrity checks on the model files.
+- **Engineering:** typed Python (tested in CI on 3.11 and 3.12) checked with `mypy --strict`, data contracts, tests with an 80 % coverage gate, CI (lint, types, tests, secret scan, dependency audit, Docker build) and SHA-256 integrity checks on the model files.
 
 ## Resumen en español
 
@@ -45,18 +45,18 @@ The figures come from a local `make evaluate-full` run on 2026-10-31 with five r
 
 | Target | Model | 30 days | 60 days | 90 days |
 |---|---|---|---|---|
-| Cash-in (`y_cash`) | Hybrid (Prophet base) | 0.603 | 0.443 | 0.386 |
-| Cash-in (`y_cash`) | Seasonal naive (365 days) | 0.814 | 0.635 | 0.558 |
-| Cash-in (`y_cash`) | XGBoost | 0.834 | 0.672 | 0.600 |
-| Cash-in (`y_cash`) | SARIMA | 0.927 | 0.952 | 0.959 |
+| Cash-in (`y_cash`) | Hybrid (Prophet base) | 0.571 | 0.431 | 0.384 |
+| Cash-in (`y_cash`) | XGBoost | 0.781 | 0.627 | 0.572 |
+| Cash-in (`y_cash`) | Seasonal naive (365 days) | 0.828 | 0.625 | 0.556 |
+| Cash-in (`y_cash`) | SARIMA | 0.921 | 0.939 | 0.949 |
 | USD/MXN (`y_fx`) | Seasonal naive (7 days) | 0.917 | 0.952 | 0.950 |
 | USD/MXN (`y_fx`) | XGBoost | 0.955 | 0.987 | 0.952 |
 | USD/MXN (`y_fx`) | SARIMA | 0.997 | 0.997 | 0.999 |
 | USD/MXN (`y_fx`) | Hybrid (random-walk base) | 1.000 | 1.000 | 1.000 |
 
-- **Cash-in.** The hybrid is the best model at every horizon, with 26 % to 31 % less error than the seasonal naive baseline. The validation gate rejected the residual tree, so the hybrid is Prophet alone. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
-- **Exchange rate.** No model clearly beats the random walk. The seasonal naive (7 days) is 5 % to 8 % better and XGBoost 1 % to 5 % better, but five origins are too few to tell gaps this small from chance, and a weekly pattern is not expected in an exchange rate. SARIMA ties the random walk. The hybrid matches it exactly (ratio 1.000 with identical errors), which means the gate rejected the residual tree and its forecast is the last observed value.
-- **Real versus synthetic data.** On the synthetic series of `make demo` the exchange-rate hybrid trailed the random walk (1.56, 1.27 and 1.15) and the cash-in hybrid scored 0.49, 0.42 and 0.38. With real macro inputs and without `cancun_arrivals` the numbers above changed; the cause of each change was not isolated. The sales simulator also re-drew its noise whenever the end date moved, which was fixed on 2026-10-31, so the figures above predate that fix and should be regenerated.
+- **Cash-in.** The hybrid is the best model at every horizon, with about 31 % less error than the seasonal naive baseline. The validation gate rejected the residual tree, so the hybrid is Prophet alone. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
+- **Exchange rate.** No model clearly beats the random walk. The seasonal naive (7 days) is 5 % to 8 % better and XGBoost 1 % to 5 % better, but five origins are too few to tell gaps this small from chance, and a weekly pattern is not expected in an exchange rate. SARIMA ties the random walk. The hybrid matches it exactly (ratio 1.000 with identical errors), which means the gate rejected the residual tree and its forecast is the last observed value. These figures did not change when the data was regenerated, because the exchange rate is real.
+- **Real versus synthetic data.** On the synthetic series of `make demo` the exchange-rate hybrid trailed the random walk (1.56, 1.27 and 1.15) and the cash-in hybrid scored 0.49, 0.42 and 0.38. With real macro inputs and without `cancun_arrivals` the cash-in ratios rose. An earlier real-data run gave 0.603, 0.443 and 0.386 for the cash-in hybrid; the simulator was then changed so that its noise no longer depends on the end date, and the figures moved to the values above. Synthetic cash-in results are sensitive to the noise that was drawn, so read them as an illustration.
 
 What the iterations taught (measured on the synthetic series of `make demo`, before the switch to real data):
 
@@ -148,8 +148,8 @@ docs/          architecture, contracts, finance, open questions, executive summa
 
 ## Limitations and status
 
-- **Checked in CI:** ruff, `mypy --strict`, the tests (coverage gate of 80 %), a secret scan and the Docker build, all on Python 3.11. The dependency audit is advisory because new advisories can appear at any time.
-- **Run end to end locally:** `make demo`, and with real data `make ingest`, `make features`, `make train`, `make evaluate-full` and `make app` (on Python 3.12).
+- **Checked in CI:** ruff, `mypy --strict`, the tests (coverage gate of 80 %), a secret scan and the Docker build. Type checks and tests run on Python 3.11 and 3.12. The dependency audit is advisory because new advisories can appear at any time.
+- **Run end to end locally:** `make demo`, and with real data `make ingest`, `make features`, `make train`, `make evaluate-full`, `make hedge`, `make explain` and `make app` (on Python 3.12).
 - **Implemented but not run end to end:** `make api`, Docker Compose, drift monitoring (`make monitor`) and the PostgreSQL and Oracle schemas (SQLite is tested in CI).
 - **Backtest size.** It has five origins and no confidence intervals, so gaps of a few percent against the random walk cannot be told from chance.
 - **Target.** A MAPE below 2 % at 90 days is not used as a success criterion: exchange rates behave close to a random walk, so the honest benchmark is the random walk itself.
