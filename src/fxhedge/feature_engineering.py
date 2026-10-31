@@ -16,6 +16,7 @@ import holidays
 import pandas as pd
 
 from fxhedge.config import Settings, TrainingConfig, load_settings, load_yaml_model
+from fxhedge.data_source import read_data_source, write_data_source
 from fxhedge.io_utils import read_csv_with_date, write_csv
 from fxhedge.schemas import MACRO_SPEC, MASTER_SPEC, SALES_SPEC, validate_frame
 
@@ -156,6 +157,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     cfg = load_yaml_model(settings.configs_dir / "training.yaml", TrainingConfig)
     master = build_master_features(args.macro, args.sales, args.out, cfg.lags, cfg.windows)
+    write_data_source(args.out.parent, read_data_source(args.macro.parent))
     logger.info("Wrote %d rows and %d columns to %s", len(master), master.shape[1], args.out)
     return 0
 

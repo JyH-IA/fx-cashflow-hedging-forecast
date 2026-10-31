@@ -248,7 +248,7 @@ def main() -> None:
         st.stop()
 
     settings = load_settings()
-    source = read_data_source(settings.data_dir / "raw")
+    source = read_data_source(settings.data_dir / "processed")
     source_line = data_source_line(source, as_of, spot)
     if source == "banxico":
         st.caption(source_line)
