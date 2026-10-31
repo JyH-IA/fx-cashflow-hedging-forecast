@@ -23,6 +23,10 @@
 | `explain` | SHAP values and a driver summary (skipped for a target whose tree the gate rejected) |
 | `io_utils` | CSV helpers and SHA-256 hashing |
 
+## Diagnostics
+
+`scripts/diagnose_hybrid.py` fits the Prophet + LightGBM hybrid on the backtest origins and prints where its error comes from. It was used to decide that the exchange rate has a random-walk base. It runs an untuned LightGBM and has no tests.
+
 ## API
 
 The FastAPI service exposes `GET /forecast` and `GET /health`. The contract can be exported with `make openapi`; `docs/openapi.json` is not versioned. The service binds to `127.0.0.1`; put it behind authentication or a TLS reverse proxy before exposing it. There is no client example.
@@ -31,4 +35,4 @@ The FastAPI service exposes `GET /forecast` and `GET /health`. The contract can 
 
 - Models and data are mounted into the containers at runtime; the image contains neither.
 - Each model directory holds `metadata.json` with the base (`base_model`), whether the residual tree is used (`residual_model`), the gate's holdout errors (`gate`) and the SHA-256 of every artifact. A rejected tree has no `lightgbm_model.txt`.
-- The scheduled workflow `monitoring.yml` writes a drift report from synthetic data and uploads it as an artifact.
+- The workflow `monitoring.yml` is started by hand (no schedule). It writes a drift report from synthetic data and uploads it as an artifact.

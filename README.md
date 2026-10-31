@@ -11,7 +11,7 @@ A hospitality group that sells in USD but pays most of its costs in MXN (82 % in
 - **Models:** a hybrid that adds LightGBM, trained on out-of-sample residuals, to a base forecast (Prophet for cash-in, a random walk for the exchange rate). A validation gate keeps the LightGBM part only when it helps. The hybrid is compared with XGBoost, SARIMA, a random walk and a seasonal naive baseline.
 - **Honest evaluation:** rolling-origin backtesting with MAPE, RMSE and MAE per horizon. The key figure is `rmse_vs_random_walk`: below 1 means the model beats a random walk. For exchange rates that is hard, and the reports say so when it happens.
 - **Decision support:** covered-interest-parity forwards, a historical hedging simulation with a block bootstrap, a Streamlit dashboard for finance leaders and a FastAPI service.
-- **Engineering:** typed Python (3.11 or 3.12) checked with `mypy --strict`, data contracts, tests with an 80 % coverage gate, CI (lint, types, tests, secret scan, dependency audit, Docker build) and SHA-256 integrity checks on the model files.
+- **Engineering:** typed Python (tested in CI on 3.11 and also run locally on 3.12) checked with `mypy --strict`, data contracts, tests with an 80 % coverage gate, CI (lint, types, tests, secret scan, dependency audit, Docker build) and SHA-256 integrity checks on the model files.
 
 ## Resumen en español
 
@@ -22,7 +22,7 @@ Proyecto educativo que pronostica el USD/MXN y el flujo de caja en USD a 30, 60 
 | Data | Source |
 |---|---|
 | USD/MXN (FIX rate) | Real: Banxico SIE API, with the Yahoo Finance close as a fallback |
-| CETES 28 days, INPC | Real: Banxico SIE API (the INPC series ID, `SP1`, still needs checking) |
+| CETES 28 days, INPC | Real: Banxico SIE API (series `SF60633` and `SP1`, both checked) |
 | Federal funds rate | Real: FRED CSV downloaded by hand |
 | Cancun arrivals | Not used: the manual SECTUR file was not provided |
 | Sales, occupancy, cash-in | Synthetic: seasonal simulator |
@@ -62,7 +62,7 @@ What the iterations taught (measured on the synthetic series of `make demo`, bef
 
 - **A residual model can hurt.** In the diagnostic, the LightGBM correction made the exchange-rate forecast worse in 3 of 5 origins. A validation gate now keeps the tree only when it lowers the error on recent residuals.
 - **Validate the way you will predict.** The first gate used the true exogenous values of each day, but forecasts hold them at their last known value. Scoring with the values frozen at the forecast origin removed that optimism.
-- **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base.
+- **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base. `scripts/diagnose_hybrid.py` runs that diagnostic.
 - **One validation window is a weak gate.** It uses a single window and a zero minimum improvement. It kept the exchange-rate tree in 2 of 5 folds and the hybrid still trailed the random walk. Only rejections are logged, so the validation errors of the kept trees are unknown.
 
 ## Quick start
@@ -78,7 +78,7 @@ make app      # dashboard at http://127.0.0.1:8501
 **Real data.** The pipeline can use real exchange-rate and macro series instead of the synthetic ones.
 
 1. Request a token for the [Banxico SIE API](https://www.banxico.org.mx/SieAPIRest/service/v1/token), copy `.env.example` to `.env` and set `BANXICO_TOKEN`. `.env` is git-ignored: never commit it.
-2. Comment out `DB_URL` in `.env` unless a PostgreSQL server is running (`make db-up`). With `DB_URL` set, `make ingest` also stores the simulated sales in that database and stops if it cannot connect.
+2. Keep `DB_URL` commented out in `.env` unless a PostgreSQL server is running (`make db-up`). With `DB_URL` set, `make ingest` also stores the simulated sales in that database and stops if it cannot connect.
 3. Download the effective federal funds rate (series `DFF`) from FRED as a CSV and save it as `data/external/fed_funds.csv`. The SECTUR file `data/external/sectur_arribos.csv` (columns `month`, `cancun_arrivals`) is optional: without it, `cancun_arrivals` is left out.
 4. Run the pipeline. `make ingest` stops at the end date of `configs/simulator.yaml`, so pass `--end` to bring the data up to date (it also extends the synthetic sales to that date):
 
@@ -90,7 +90,7 @@ make app
 
 Notes:
 
-- The series IDs in `configs/series.yaml` for the FIX rate (`SF43718`) and the 28-day CETES (`SF60633`) were checked against Banxico's documentation. `SP1` (INPC) still needs checking.
+- The series IDs in `configs/series.yaml` were checked: the FIX rate (`SF43718`) and the 28-day CETES (`SF60633`) against Banxico's documentation, and the INPC (`SP1`) against the published value for September 2026 (146.075).
 - Ingestion writes `data/raw/data_source.txt` (`banxico`), `make features` copies it to `data/processed/`, and the dashboard shows the source and the date of the last observation under the title.
 - Do not run `make sample` after ingesting: it overwrites the raw files with synthetic data.
 - `rate_mxn_pct` and `rate_usd_pct` in `configs/business.yaml` set the forward rate. They are illustrative and were set to 6.22 % and 3.88 % in October 2026; update them when you refresh the data.
@@ -130,6 +130,7 @@ src/fxhedge/   config, schemas, db, data_ingestion, data_source, simulator, samp
                finance, hedging_backtest, inference, monitoring, dashboard, api
 app/           Streamlit dashboard
 configs/       YAML configuration (business assumptions, series, training, monitoring)
+scripts/       diagnostic of the Prophet + LightGBM hybrid
 sql/           versioned queries (PostgreSQL/SQLite and an Oracle schema)
 notebooks/     EDA and baseline backtest (no stored outputs)
 tests/         unit tests (no network, no secrets)
@@ -148,8 +149,8 @@ docs/          architecture, contracts, finance, open questions, executive summa
 
 ## Limitations and status
 
-- **Checked in CI:** ruff, `mypy --strict`, the tests (coverage gate of 80 %), a secret scan and the Docker build. The dependency audit is advisory because new advisories can appear at any time.
-- **Run end to end locally:** `make demo`, and with real data `make ingest`, `make features`, `make train`, `make evaluate-full` and `make app`.
+- **Checked in CI:** ruff, `mypy --strict`, the tests (coverage gate of 80 %), a secret scan and the Docker build, all on Python 3.11. The dependency audit is advisory because new advisories can appear at any time.
+- **Run end to end locally:** `make demo`, and with real data `make ingest`, `make features`, `make train`, `make evaluate-full` and `make app` (on Python 3.12).
 - **Implemented but not run end to end:** `make api`, Docker Compose, drift monitoring (`make monitor`) and the PostgreSQL and Oracle schemas (SQLite is tested in CI).
 - **Backtest size.** It has five origins and no confidence intervals, so gaps of a few percent against the random walk cannot be told from chance.
 - **Target.** A MAPE below 2 % at 90 days is not used as a success criterion: exchange rates behave close to a random walk, so the honest benchmark is the random walk itself.

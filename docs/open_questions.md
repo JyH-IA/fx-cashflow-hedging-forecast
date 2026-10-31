@@ -9,11 +9,11 @@ Last reviewed on 2026-10-31. Items marked `TODO(verify)` in the code and configu
 - `make demo` ran on a developer machine.
 - Ingestion with a real Banxico token works: the URL template and the shape of the JSON response are correct, and the Yahoo Finance fallback is available. It ran on 2026-10-31.
 - Series IDs: `SF43718` (FIX) and `SF60633` (28-day CETES) were checked against Banxico's documentation, and `DFF` against FRED. `SF43783`, used before for `cetes_28d`, is the 28-day TIIE and was replaced.
+- `SP1` (INPC) was checked against the published index: the downloaded data holds 145.462 for August 2026 and 146.075 for September 2026, the published values.
 - After the real-data training of 2026-10-31, `make explain` reported that the gate disabled the residual model for both targets, so there is nothing to explain with SHAP. An older `reports/shap_drivers.md` had listed drivers of a `y_fx` residual model from a previous run; run `make explain` after every `make train` to keep the file current.
 
 ## Series and data still to check
 
-- `SP1` (INPC) in `configs/series.yaml` is not checked against Banxico's documentation.
 - SECTUR has no API assumed here: arrivals are a manual CSV download. The file was not provided in the real-data run, so `cancun_arrivals` is left out.
 - The interest rates in `configs/business.yaml` (6.22 % and 3.88 %) are illustrative inputs for the forward and must be updated by hand.
 - `make ingest` stops at the end date of `configs/simulator.yaml` and fails if `DB_URL` is set and the database is down. Making the database step optional, or failing softly, is not done.
@@ -35,10 +35,14 @@ Last reviewed on 2026-10-31. Items marked `TODO(verify)` in the code and configu
 - Real XGBoost training and JSON artifacts, and saving and loading real LightGBM artifacts.
 - The validation gate with a real LightGBM tree (tests use stub trees).
 - SHAP `TreeExplainer` on a loaded booster (it runs locally with `make explain` when a tree is kept).
+- `scripts/diagnose_hybrid.py` has no tests.
 - `make api`, Docker Compose, drift monitoring (`make monitor`) and the PostgreSQL and Oracle schemas.
 
 ## Tooling
 
+- CI runs Python 3.11 only. `requires-python` allows 3.12, which is the version used locally; a 3.11 and 3.12 matrix is not set up.
+- The drift report workflow (`monitoring.yml`) is manual and uses synthetic data.
+- The Docker `app` service does not mount `reports/`, so the reliability tab has no data in the container.
 - Docker base images are not pinned by digest.
 - A container image scan (for example Trivy) is not configured; add it once the action version can be verified.
 - The dependency audit stays advisory because new advisories can appear at any time.
