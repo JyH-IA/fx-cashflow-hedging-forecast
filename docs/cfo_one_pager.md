@@ -4,7 +4,7 @@
 
 ## Recommendation
 
-The results do not support a specific hedge ratio. In the historical simulation a fixed hedge cut the variance of the monthly margin by about 16 % (95 % interval 2 % to 32 %), without a reliable gain in the mean margin or in the worst month. Read hedging here as a way to reduce volatility, not to earn more.
+The results do not support a specific hedge ratio. In the historical simulation a fixed hedge cut the variance of the monthly margin by about 18 % (95 % interval 3 % to 33 %), without a reliable gain in the mean margin or in the worst month. Read hedging here as a way to reduce volatility, not to earn more.
 
 ## What we expect
 
@@ -20,10 +20,11 @@ Source: the dashboard run of 2026-10-31. The expected rate is flat because the f
 
 From `reports/hedging_backtest.md` (synthetic cash flows, 1000 block-bootstrap resamples):
 
-- Margin variance falls 16 % with a fixed hedge (2 % to 32 %). The forecast-guided strategy also shows 16 %, but its interval (-4 % to 39 %) includes zero.
-- The mean monthly margin rises by about 228K MXN (fixed) and 342K MXN (forecast), but both intervals include zero (-9K to 431K and -14K to 647K).
-- The worst month does not improve: 6.25M MXN with no hedge, 6.25M fixed and 6.13M forecast-guided.
+- Margin variance falls 18 % with a fixed hedge (3 % to 33 %). The forecast-guided strategy also shows 18 %, but its interval (-2 % to 40 %) includes zero.
+- The mean monthly margin rises by about 147K MXN (fixed) and 221K MXN (forecast-guided), but both intervals include zero (-90K to 349K and -135K to 524K).
+- The worst month does not improve: 6.25M MXN with no hedge, 6.20M fixed and 6.06M forecast-guided.
 - The forecast-guided strategy used the random-walk expectation, because no model forecasts were provided. It does not measure forecast skill.
+- The forward is priced with the interest rates of `configs/business.yaml`, so the size of any gain in the mean margin depends on those assumptions.
 
 ## What drives the forecast
 
