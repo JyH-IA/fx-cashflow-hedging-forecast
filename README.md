@@ -120,7 +120,7 @@ flowchart LR
     FE --> MON["monitoring (PSI)"]
 ```
 
-The SQL layer is optional: without `DB_URL`, ingestion writes CSV files. More detail: [architecture](docs/architecture.md), [data contracts](docs/data_contracts.md), [finance formulas](docs/finance.md) and [open questions](docs/open_questions.md).
+The SQL layer is optional: without `DB_URL`, ingestion writes CSV files. More detail: [architecture](docs/architecture.md), [data contracts](docs/data_contracts.md), [finance formulas](docs/finance.md), [open questions](docs/open_questions.md) and the [executive summary](docs/cfo_one_pager.md).
 
 ## Repository layout
 
@@ -133,7 +133,7 @@ configs/       YAML configuration (business assumptions, series, training, monit
 sql/           versioned queries (PostgreSQL/SQLite and an Oracle schema)
 notebooks/     EDA and baseline backtest (no stored outputs)
 tests/         unit tests (no network, no secrets)
-docs/          architecture, contracts, finance, open questions
+docs/          architecture, contracts, finance, open questions, executive summary
 ```
 
 ## Design decisions

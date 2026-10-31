@@ -10,11 +10,11 @@ The results do not support a specific hedge ratio. In the historical simulation 
 
 | Horizon | Expected USD/MXN | 95 % range | Expected USD inflow |
 |---|---|---|---|
-| 30 days | `<read from the dashboard>` | `<read from the dashboard>` | `<read from the dashboard>` |
-| 60 days | `<read from the dashboard>` | `<read from the dashboard>` | `<read from the dashboard>` |
-| 90 days | 18.80 (last observed rate, 18.7962) | about 17.7 to 21.3 | 11.6M USD (next 3 months) |
+| 30 days | 18.80 | 18.09 to 20.39 | 3.5M USD (next month) |
+| 60 days | 18.80 | 17.87 to 20.76 | 7.4M USD (next 2 months) |
+| 90 days | 18.80 | about 17.7 to 21.3 | 11.6M USD (next 3 months) |
 
-Source: the dashboard run of 2026-10-31. The expected rate is flat because the forecast repeats the last observed rate. The range is an empirical prediction interval, not Value at Risk.
+Source: the dashboard run of 2026-10-31; the 90-day range is approximate. The expected rate is flat at the last observed rate (18.7962 on 2026-10-30) because the forecast repeats it. The range is an empirical prediction interval, not Value at Risk.
 
 ## Does hedging help?
 
@@ -24,11 +24,11 @@ From `reports/hedging_backtest.md` (synthetic cash flows, 1000 block-bootstrap r
 - The mean monthly margin rises by about 147K MXN (fixed) and 221K MXN (forecast-guided), but both intervals include zero (-90K to 349K and -135K to 524K).
 - The worst month does not improve: 6.25M MXN with no hedge, 6.20M fixed and 6.06M forecast-guided.
 - The forecast-guided strategy used the random-walk expectation, because no model forecasts were provided. It does not measure forecast skill.
-- The forward is priced with the interest rates of `configs/business.yaml`, so the size of any gain in the mean margin depends on those assumptions.
+- The forward was priced with 6.22 % for Mexico and 3.88 % for the US (`configs/business.yaml`, illustrative), so the size of any gain in the mean margin depends on those rates.
 
 ## What drives the forecast
 
-Cash-in: the validation gate disabled the residual model, so the forecast is Prophet alone and SHAP does not apply. USD/MXN: the SHAP summary lists rolling averages of the consumer price index (38 %, 11 % and 10 % of the residual model's importance). That index moves in monthly steps and trends upward, so these features probably stand in for time. They should not be read as an economic driver of the exchange rate.
+Neither forecast has a residual model: the validation gate rejected it for both targets. USD/MXN repeats the last observed rate, so nothing drives it. Cash-in follows Prophet's trend and seasonality, which come from the seasonal pattern built into the synthetic data. SHAP does not apply to either target.
 
 ## How good is the model
 
