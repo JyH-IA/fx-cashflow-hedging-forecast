@@ -9,7 +9,7 @@ F = S * (1 + r_mxn * d / 360) / (1 + r_usd * d / 360)
 forward points = F - S
 ```
 
-`S` is the spot, `r` the annual rates (as fractions) and `d` the days to settlement.
+`S` is the spot, `r` the annual rates (as fractions) and `d` the days to settlement. The rates come from `configs/business.yaml` (`rate_mxn_pct`, `rate_usd_pct`). They are illustrative inputs, so the gap between the forward and the spot shown in the dashboard is that rate gap, not a prediction.
 
 ## Proceeds of a partial hedge
 
@@ -21,6 +21,15 @@ proceeds (MXN) = hedged * effective F + (notional - hedged) * realized spot - fe
 
 The fixed fee is charged only when `ratio > 0`. The expected benefit is the proceeds minus `notional * forecast spot`; a negative value is the price of certainty.
 
+## Figures in the dashboard
+
+- **Bad case and good case:** the low and high ends of the 95 % historical range of the move over the horizon, applied to the settlement-day rate.
+- **Downside protected in a bad case:** the bad-case proceeds of the selected hedge minus the bad-case proceeds without a hedge.
+- **Swing narrowed by:** how much the gap between the good and the bad case shrinks compared with no hedge.
+- **Bank cost of this hedge:** the spread and the fixed fee of `configs/business.yaml` for the selected ratio.
+
+The dashboard does not show the expected benefit: with a flat forecast it only reflects the forward premium and could be read as a gain.
+
 ## Historical simulation
 
 - One hedge per month, placed on the first available day.
@@ -31,7 +40,7 @@ The fixed fee is charged only when `ratio > 0`. The expected benefit is the proc
 
 ## Commission avoided
 
-The dashboard reports the bank cost avoided by hedging the selected ratio instead of 100 % of the amount. The assumptions (spread in basis points and a fixed fee) live in `configs/business.yaml`.
+`commission_saving_mxn` in `fxhedge.dashboard` computes the bank cost avoided by hedging the selected ratio instead of 100 %. The dashboard does not show it since its redesign.
 
 ## Prediction intervals
 

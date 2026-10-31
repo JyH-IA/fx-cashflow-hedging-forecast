@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/JyH-IA/fx-cashflow-hedging-forecast/actions/workflows/ci.yml/badge.svg)](https://github.com/JyH-IA/fx-cashflow-hedging-forecast/actions/workflows/ci.yml)
 
-> **Educational portfolio project.** The internal business data (sales, occupancy, cash-in) is synthetic, the company is fictional, and the figures are illustrative. Nothing here is financial advice.
+> **Educational portfolio project.** The internal business data (sales, occupancy, cash-in) is synthetic, the company is fictional, and the hedging assumptions are illustrative. The exchange-rate and macro series can be real (Banxico, FRED) or synthetic (`make demo`); the dashboard says which. Nothing here is financial advice.
 
 ## Summary
 
@@ -10,16 +10,38 @@ A hospitality group that sells in USD but pays most of its costs in MXN (82 % in
 
 - **Models:** a hybrid that adds LightGBM, trained on out-of-sample residuals, to a base forecast (Prophet for cash-in, a random walk for the exchange rate). A validation gate keeps the LightGBM part only when it helps. The hybrid is compared with XGBoost, SARIMA, a random walk and a seasonal naive baseline.
 - **Honest evaluation:** rolling-origin backtesting with MAPE, RMSE and MAE per horizon. The key figure is `rmse_vs_random_walk`: below 1 means the model beats a random walk. For exchange rates that is hard, and the reports say so when it happens.
-- **Decision support:** covered-interest-parity forwards, a historical hedging simulation with a block bootstrap, a Streamlit dashboard for finance leaders and a FastAPI service that another system (for example a Java/Spring Boot backend) can call.
-- **Engineering:** typed Python 3.11, data contracts, SQL layer (PostgreSQL or Oracle), drift monitoring (PSI), model integrity checks, tests, CI and Docker.
+- **Decision support:** covered-interest-parity forwards, a historical hedging simulation with a block bootstrap, a Streamlit dashboard for finance leaders and a FastAPI service.
+- **Engineering:** typed Python (3.11 or 3.12) checked with `mypy --strict`, data contracts, tests with an 80 % coverage gate, CI (lint, types, tests, secret scan, dependency audit, Docker build) and SHA-256 integrity checks on the model files.
 
 ## Resumen en español
 
-Proyecto educativo que pronostica el tipo de cambio USD/MXN y el flujo de caja en USD a 30, 60 y 90 días para apoyar decisiones de cobertura con forwards. Los datos internos son sintéticos y la empresa es ficticia. Combina una base (Prophet para el flujo de caja y un *random walk* para el tipo de cambio) con LightGBM sobre sus residuos, protegido por una compuerta de validación. Compara el resultado con *baselines* (incluido el *random walk*), simula históricamente la cobertura y expone los resultados en un panel de Streamlit y en una API. No es asesoría financiera.
+Proyecto educativo que pronostica el USD/MXN y el flujo de caja en USD a 30, 60 y 90 días para apoyar decisiones de cobertura con forwards. El tipo de cambio y las variables macro vienen de Banxico y FRED; los datos internos son sintéticos y la empresa es ficticia. Ningún modelo supera con claridad al *random walk* en el tipo de cambio. No es asesoría financiera.
+
+## Data used
+
+| Data | Source |
+|---|---|
+| USD/MXN (FIX rate) | Real: Banxico SIE API, with the Yahoo Finance close as a fallback |
+| CETES 28 days, INPC | Real: Banxico SIE API (the INPC series ID, `SP1`, still needs checking) |
+| Federal funds rate | Real: FRED CSV downloaded by hand |
+| Cancun arrivals | Not used: the manual SECTUR file was not provided |
+| Sales, occupancy, cash-in | Synthetic: seasonal simulator |
+| Interest rates of the forward, bank spread and fee | Illustrative: `configs/business.yaml` |
+
+## Dashboard
+
+`make app` opens a dashboard with four tabs:
+
+- **Summary:** a headline sentence, four key figures about what the selected hedge protects, and a bar chart of the possible MXN outcomes for each hedge level.
+- **Hedging:** the hedge levels side by side and the USD/MXN forecast with its plausible range.
+- **How reliable is it?:** the backtest comparison, read from `reports/metrics.json`.
+- **Technical details:** how the forecasts are built, what the validation gate decided, a glossary and the assumptions.
+
+A line under the title states the data source, the date of the last observation and the last USD/MXN rate; synthetic or unrecorded data shows as a warning. The USD/MXN line is flat because the base forecast is the last observed value, and the shaded band is the 95 % historical range of the move over the horizon. The layout was checked in a desktop browser only.
 
 ## Results and lessons
 
-The figures come from a local `make evaluate-full` run on 2026-10-31, with five rolling origins. The USD/MXN series is real market data from Banxico (the FIX rate, with Yahoo Finance as a fallback) from 2020-01-01 to 2026-10-30, and the macro inputs come from Banxico and FRED. The internal sales and cash-in are synthetic. The manual SECTUR file was not provided, so `cancun_arrivals` is left out. Each value is the model's RMSE divided by the random walk's RMSE, so a value below 1 beats the random walk. They depend on the data in use: regenerate them with `make evaluate-full` and read `reports/backtest.md`.
+The figures come from a local `make evaluate-full` run on 2026-10-31 with five rolling origins, on the data above (USD/MXN from 2020-01-01 to 2026-10-30). Each value is the model's RMSE divided by the random walk's RMSE, so a value below 1 beats the random walk. They depend on the data in use: regenerate them with `make evaluate-full` and read `reports/backtest.md`.
 
 | Target | Model | 30 days | 60 days | 90 days |
 |---|---|---|---|---|
@@ -33,16 +55,15 @@ The figures come from a local `make evaluate-full` run on 2026-10-31, with five 
 | USD/MXN (`y_fx`) | Hybrid (random-walk base) | 1.000 | 1.000 | 1.000 |
 
 - **Cash-in.** The hybrid is the best model at every horizon, with 26 % to 31 % less error than the seasonal naive baseline. The validation gate rejected the residual tree, so the hybrid is Prophet alone. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
-- **Exchange rate.** No model clearly beats the random walk. The seasonal naive (7 days) is 5 % to 8 % better and XGBoost 1 % to 5 % better, but gaps this small over five origins should not be read as a real edge. SARIMA ties the random walk. The hybrid matches it exactly (ratio 1.000 with identical errors), which means the gate rejected the residual tree and its forecast is the last observed value. The reports state this as it is, because exchange rates behave close to a random walk.
+- **Exchange rate.** No model clearly beats the random walk. The seasonal naive (7 days) is 5 % to 8 % better and XGBoost 1 % to 5 % better, but five origins are too few to tell gaps this small from chance, and a weekly pattern is not expected in an exchange rate. SARIMA ties the random walk. The hybrid matches it exactly (ratio 1.000 with identical errors), which means the gate rejected the residual tree and its forecast is the last observed value.
+- **Real versus synthetic data.** On the synthetic series of `make demo` the exchange-rate hybrid trailed the random walk (1.56, 1.27 and 1.15) and the cash-in hybrid scored 0.49, 0.42 and 0.38. With real macro inputs and without `cancun_arrivals` the numbers above changed; the cause of each change was not isolated.
 
-What the iterations taught (the figures in the next four points were measured on the synthetic series of `make demo`, before the switch to real data):
+What the iterations taught (measured on the synthetic series of `make demo`, before the switch to real data):
 
 - **A residual model can hurt.** In the diagnostic, the LightGBM correction made the exchange-rate forecast worse in 3 of 5 origins. A validation gate now keeps the tree only when it lowers the error on recent residuals.
 - **Validate the way you will predict.** The first gate used the true exogenous values of each day, but forecasts hold them at their last known value. Scoring with the values frozen at the forecast origin removed that optimism.
-- **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base. The hybrid's ratio for the exchange rate moved from 2.16, 1.65 and 1.81 to 1.56, 1.27 and 1.15 on that series.
-- **Removing the tree helped cash-in.** Once the gate rejected the residual tree for cash-in, its ratio improved from 0.67, 0.56 and 0.49 to 0.49, 0.42 and 0.38 on that series.
-- **Real data changes the numbers, not the conclusion.** With Banxico data the exchange-rate hybrid ties the random walk instead of trailing it, and the cash-in ratios rise to the values in the table because the macro inputs are now real and `cancun_arrivals` is missing. The exchange rate is still not predictable with these models.
-- **The gate is not perfect.** It uses one validation window and a zero minimum improvement. On the synthetic series it logged a rejection of the exchange-rate tree in only 3 of the 5 folds, so it kept the tree in the other 2, and the hybrid trailed the random walk. The per-fold decisions of the real-data run are in the log of `make evaluate-full`. See the limitations below.
+- **Choose the base by evidence.** Prophet alone lost to a random walk at all five diagnostic origins for the exchange rate, so that target uses a random-walk base.
+- **One validation window is a weak gate.** It uses a single window and a zero minimum improvement. It kept the exchange-rate tree in 2 of 5 folds and the hybrid still trailed the random walk. Only rejections are logged, so the validation errors of the kept trees are unknown.
 
 ## Quick start
 
@@ -87,7 +108,7 @@ docker compose --profile app up --build    # dashboard and API in containers
 flowchart LR
     BX["Banxico API"] --> ING["data_ingestion"]
     YF["Yahoo Finance"] --> ING
-    SIM["simulator (synthetic sales)"] --> DB[("SQL: PostgreSQL or Oracle")]
+    SIM["simulator (synthetic sales)"] --> DB[("optional SQL: PostgreSQL or Oracle")]
     DB --> ING
     ING --> FE["feature_engineering"]
     FE --> TR["model_training: base + LightGBM with gate, XGBoost"]
@@ -99,12 +120,12 @@ flowchart LR
     FE --> MON["monitoring (PSI)"]
 ```
 
-More detail: [architecture](docs/architecture.md), [data contracts](docs/data_contracts.md), [finance formulas](docs/finance.md) and the [one-page executive summary template](docs/cfo_one_pager.md).
+The SQL layer is optional: without `DB_URL`, ingestion writes CSV files. More detail: [architecture](docs/architecture.md), [data contracts](docs/data_contracts.md), [finance formulas](docs/finance.md) and [open questions](docs/open_questions.md).
 
 ## Repository layout
 
 ```text
-src/fxhedge/   config, schemas, db, data_ingestion, simulator, sample_data,
+src/fxhedge/   config, schemas, db, data_ingestion, data_source, simulator, sample_data,
                feature_engineering, model_training, evaluation, explain,
                finance, hedging_backtest, inference, monitoring, dashboard, api
 app/           Streamlit dashboard
@@ -127,20 +148,22 @@ docs/          architecture, contracts, finance, open questions
 
 ## Limitations and status
 
-- CI runs ruff, `mypy --strict`, the tests (at least 80 % coverage), a secret scan and the Docker build. The dependency audit is advisory because new advisories can appear at any time.
-- A target of MAPE below 2 % at 90 days is not used as a success criterion: exchange rates behave close to a random walk, so the honest benchmark is the random walk itself.
-- When the gate rejects the tree for a target, its forecast comes from the base alone. The scenarios (plus or minus 10 %) shock only the model features, so they do not move that forecast.
-- The gate uses a single validation window (about three blocks of 90 days) and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize. On the synthetic series the exchange-rate tree was kept in 2 of 5 folds and the hybrid trailed the random walk; with real data the hybrid ties it. Read `reports/backtest.md` for the current numbers.
-- The hedging simulation assumes the next month's USD inflow is known when the hedge is placed, to isolate FX risk. It is a historical simulation, not an A/B test.
-- MLflow tracking, a Java client example and a hashed `requirements.lock` are not implemented. See [open questions](docs/open_questions.md) for the full list of items to verify.
+- **Checked in CI:** ruff, `mypy --strict`, the tests (coverage gate of 80 %), a secret scan and the Docker build. The dependency audit is advisory because new advisories can appear at any time.
+- **Run end to end locally:** `make demo`, and with real data `make ingest`, `make features`, `make train`, `make evaluate-full` and `make app`.
+- **Implemented but not run end to end:** `make api`, Docker Compose, drift monitoring (`make monitor`) and the PostgreSQL and Oracle schemas (SQLite is tested in CI).
+- **Backtest size.** It has five origins and no confidence intervals, so gaps of a few percent against the random walk cannot be told from chance.
+- **Target.** A MAPE below 2 % at 90 days is not used as a success criterion: exchange rates behave close to a random walk, so the honest benchmark is the random walk itself.
+- **Scenarios.** When the gate rejects the tree for a target, its forecast comes from the base alone, and the scenarios (plus or minus 10 %) shock only the model features, so they do not move that forecast.
+- **Gate.** It uses a single validation window (about three blocks of 90 days) and `gate_min_improvement` is 0 by default, so it can accept a tree that does not generalize.
+- **Hedging simulation.** It assumes the next month's USD inflow is known when the hedge is placed, to isolate FX risk. It is a historical simulation, not an A/B test.
+- **Not implemented:** MLflow tracking, a Java client example and a hashed `requirements.lock`. See [open questions](docs/open_questions.md) for the full list of items to verify.
 
 ## Roadmap
 
-1. Walk-forward forecasts for the hedging simulation instead of the random-walk expectation.
-2. Backtest-based prediction intervals and a proper VaR/CVaR module.
-3. MLflow experiment tracking and a model registry.
-4. A Spring Boot client generated from the OpenAPI contract (`make openapi`).
-5. A second project on member retention (survival analysis, classification and uplift).
+1. More backtest origins, with the error of each origin saved to give intervals or a significance test.
+2. Walk-forward forecasts for the hedging simulation instead of the random-walk expectation.
+3. Backtest-based prediction intervals and a proper VaR/CVaR module.
+4. MLflow experiment tracking and a model registry.
 
 ## License
 

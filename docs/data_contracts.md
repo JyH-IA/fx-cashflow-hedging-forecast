@@ -9,7 +9,7 @@ Every table is validated with `validate_frame`. A violation raises `DataContract
 | `date` | datetime | no | Unique key |
 | `usdmxn_fix` | float | yes | Banxico FIX, MXN per USD; missing on non-banking days |
 | `usdmxn_yf` | float | yes | Yahoo Finance close (`MXN=X`) |
-| `cetes_28d` | float | yes | 28-day CETES rate, % per year |
+| `cetes_28d` | float | yes | 28-day CETES rate, % per year (Banxico `SF60633`) |
 | `fed_funds` | float | yes | Effective federal funds rate, % per year |
 | `inpc` | float | yes | Consumer price index; monthly value repeated within the month |
 | `cancun_arrivals` | float | yes | International passengers; monthly value repeated within the month |
@@ -31,6 +31,10 @@ In SQL the key column is `sale_date` (DATE is reserved in Oracle); queries alias
 - Exogenous variables that have data, and their lags (7, 14, 30 days) and rolling mean/std (7, 14, 30 days) on shifted series.
 - Calendar columns: `day_of_week`, `month`, `quarter`, `is_weekend`, `is_holiday_mx`, `is_high_season`, `is_hurricane_season`.
 - Same-day columns that would leak the target (`usdmxn_fix`, `usdmxn_yf`, `sales_usd`, `cash_in_usd`, `occupancy_rate`) are dropped.
+
+## `data_source.txt`
+
+A one-word text file in `data/raw/` (written by `make sample` and `make ingest`) and in `data/processed/` (copied by `make features`). Its value is `synthetic` or `banxico`; a missing or unrecognised file reads as `unknown`. The dashboard reads the copy in `data/processed/`.
 
 ## API response (`GET /forecast`)
 
