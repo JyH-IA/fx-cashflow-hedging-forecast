@@ -1,6 +1,6 @@
 # Security Policy
 
-This is an educational portfolio project. All internal business data is synthetic and every figure is illustrative. Nothing here is financial advice.
+This is an educational portfolio project. All internal business data is synthetic and the hedging assumptions are illustrative. The USD/MXN and macro series can be real public data (Banxico, FRED) or synthetic (`make demo`). Nothing here is financial advice.
 
 ## Secrets policy
 
@@ -9,13 +9,13 @@ This is an educational portfolio project. All internal business data is syntheti
 - The Banxico token is sent in the `Bmx-Token` header, never in the URL.
 - Never pass secrets to Docker with `ENV` or `ARG`; use `--env-file` or runtime secrets.
 - Do not paste real tokens or company data into prompts for AI tools, issues or pull requests.
-- Protections in place: `gitleaks` and `detect-private-key` in pre-commit and in CI, and `nbstripout` for notebooks. Also enable GitHub secret scanning and push protection in the repository settings.
+- Protections in place: `gitleaks` in CI, `detect-private-key` in pre-commit and `nbstripout` for notebooks. Pre-commit does not run for files uploaded through the GitHub web interface or the API, so also enable GitHub secret scanning and push protection in the repository settings.
 
 ## If a secret leaks
 
-1. Revoke the token at the provider (for Banxico, request a new SIE token) and generate a new one.
-2. Remove the secret from the codebase and rotate any related credentials.
-3. Rewrite the git history only as an additional measure; revocation is mandatory.
+1. Remove the secret from the codebase and rotate any related credentials.
+2. Revoke the token at the provider and generate a new one. A Banxico SIE token holds no personal data and has no cost; if its query limits are exceeded it is only blocked for a while, so the impact of a leak is limited to its quota. Revoke it anyway if you see misuse. For any other credential, revocation is mandatory.
+3. Rewrite the git history only as an additional measure.
 
 ## Model artifacts
 

@@ -1,7 +1,6 @@
-# TODO(verify): confirm the identifiers still marked below against the provider documentation.
 banxico:
   usdmxn_fix: SF43718   # verified: FIX exchange rate, pesos per US dollar (Banxico SIE)
   cetes_28d: SF60633    # verified: 28-day CETES (Banxico SIE). SF43783 is the 28-day TIIE.
-  inpc: SP1             # TODO(verify): national consumer price index (Banxico SIE)
+  inpc: SP1             # verified: INPC, September 2026 value 146.075 matches the published index
 yahoo_ticker: MXN=X
 fed_funds_fred_id: DFF  # verified: effective federal funds rate (FRED)

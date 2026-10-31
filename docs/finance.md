@@ -38,10 +38,6 @@ The dashboard does not show the expected benefit: with a flat forecast it only r
 - Strategies: no hedge, fixed ratio, and a forecast-guided ratio that hedges more when the forecast is below the forward.
 - Uncertainty: 95 % percentile intervals from a moving-block bootstrap of the monthly margins.
 
-## Commission avoided
-
-`commission_saving_mxn` in `fxhedge.dashboard` computes the bank cost avoided by hedging the selected ratio instead of 100 %. The dashboard does not show it since its redesign.
-
 ## Prediction intervals
 
 They are empirical intervals based on the history of h-day log changes, not Value at Risk. A proper VaR needs backtest residuals and a stated confidence level and method; it is on the roadmap.

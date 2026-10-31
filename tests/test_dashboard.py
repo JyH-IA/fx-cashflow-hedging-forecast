@@ -9,10 +9,8 @@ import pytest
 from fxhedge.config import BusinessConfig
 from fxhedge.dashboard import (
     DEFAULT_RATIOS,
-    commission_saving_mxn,
     expected_cash_in_usd,
     forecast_summary,
-    format_mxn,
     impact_table,
 )
 
@@ -69,19 +67,3 @@ def test_impact_table_validates_inputs() -> None:
         impact_table(_frame().iloc[0:0], 17.0, 1.0, [0.5], BUSINESS, 30)
     with pytest.raises(ValueError):
         forecast_summary(_frame(), spot=0.0)
-
-
-def test_commission_saving_grows_as_less_is_hedged() -> None:
-    full = commission_saving_mxn(300_000.0, 1.0, 17.0, BUSINESS, 30)
-    half = commission_saving_mxn(300_000.0, 0.5, 17.0, BUSINESS, 30)
-    none = commission_saving_mxn(300_000.0, 0.0, 17.0, BUSINESS, 30)
-    assert full == pytest.approx(0.0)
-    assert 0.0 < half < none
-
-
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [(1234567.4, "$1,234,567 MXN"), (-2500.0, "-$2,500 MXN"), (0.0, "$0 MXN")],
-)
-def test_format_mxn(value: float, expected: str) -> None:
-    assert format_mxn(value) == expected

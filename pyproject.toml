@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fxhedge"
 version = "0.1.0"
-description = "USD/MXN and cash-flow forecasting to support FX forward hedging decisions (educational, synthetic data)."
+description = "USD/MXN and cash-flow forecasting to support FX forward hedging decisions (educational; the internal business data is synthetic)."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }

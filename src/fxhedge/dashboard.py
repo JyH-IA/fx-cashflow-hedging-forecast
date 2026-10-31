@@ -145,30 +145,6 @@ def impact_table(
     return pd.DataFrame(rows)
 
 
-def commission_saving_mxn(
-    notional_usd: float,
-    selected_ratio: float,
-    spot: float,
-    business: BusinessConfig,
-    horizon: int,
-) -> float:
-    """Bank cost avoided by hedging ``selected_ratio`` instead of the whole notional."""
-    forward = forward_rate(spot, business.rate_mxn_pct, business.rate_usd_pct, horizon)
-
-    def cost(ratio: float) -> float:
-        return compute_hedge_savings(
-            notional_usd, ratio, spot, forward, business.bank_spread_bps, business.fixed_fee_usd
-        ).bank_cost_mxn
-
-    return cost(1.0) - cost(selected_ratio)
-
-
-def format_mxn(value: float) -> str:
-    """Format an amount as ``$1,234,567 MXN``."""
-    sign = "-" if value < 0 else ""
-    return f"{sign}${abs(value):,.0f} MXN"
-
-
 def format_compact_money(value: float, currency: str = "MXN") -> str:
     """Format an amount with a K, M or B suffix, for example ``$9.6M MXN``."""
     sign = "-" if value < 0 else ""
