@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,8 @@ from fxhedge.dashboard import (
     DEFAULT_RATIOS,
     HEDGE_LEVELS,
     base_only_targets,
+    data_source_line,
+    escape_markdown_dollars,
     format_compact_money,
     friendly_impact_table,
     hedge_ratio,
@@ -155,6 +158,39 @@ def test_headline_without_a_hedge_explains_the_bad_case() -> None:
     assert "Without a hedge" in text
     assert "next month" in text
     assert "$148.5M MXN" in text
+
+
+def test_escaping_protects_every_dollar_sign_of_the_headline() -> None:
+    kpis = summary_kpis(_impact(), 0.5)
+    text = summary_headline(kpis, 90, 0.5, 16_400_000.0)
+    escaped = escape_markdown_dollars(text)
+    assert text.count("$") == 3
+    assert escaped.count("\\$") == 3
+    assert "$" not in escaped.replace("\\$", "")
+
+
+def test_escaping_leaves_text_without_dollars_unchanged() -> None:
+    assert escape_markdown_dollars("Hedging 25% of the income") == "Hedging 25% of the income"
+
+
+def test_the_data_source_line_flags_synthetic_data() -> None:
+    line = data_source_line("synthetic", date(2026, 9, 30), 10.1573)
+    assert line.startswith("Data as of 2026-09-30")
+    assert "Last USD/MXN: 10.1573" in line
+    assert "SYNTHETIC" in line
+
+
+def test_the_data_source_line_names_banxico_for_real_data() -> None:
+    line = data_source_line("banxico", date(2026, 10, 29), 18.8148)
+    assert "Last USD/MXN: 18.8148" in line
+    assert "Banxico" in line
+    assert "SYNTHETIC" not in line
+
+
+def test_the_data_source_line_falls_back_for_an_unrecorded_source() -> None:
+    line = data_source_line("unknown", date(2026, 9, 30), 10.0)
+    assert "not recorded" in line
+    assert data_source_line("anything else", date(2026, 9, 30), 10.0) == line
 
 
 def test_friendly_table_uses_plain_labels_and_compact_amounts() -> None:

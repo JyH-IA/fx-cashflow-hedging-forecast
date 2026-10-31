@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +29,11 @@ HORIZON_LABELS: dict[int, str] = {
 }
 HORIZON_PERIODS: dict[int, str] = {30: "month", 60: "2 months", 90: "3 months"}
 TARGET_LABELS: dict[str, str] = {"y_fx": "USD/MXN", "y_cash": "USD cash-in"}
+DATA_SOURCE_LABELS: dict[str, str] = {
+    "synthetic": "SYNTHETIC demo data, not real market data",
+    "banxico": "Banxico market data (internal sales are synthetic)",
+    "unknown": "not recorded, run make sample or make ingest again",
+}
 METRICS_FILE = Path("reports") / "metrics.json"
 MODEL_LABELS: dict[str, str] = {
     "hybrid": "Hybrid",
@@ -171,6 +177,17 @@ def format_compact_money(value: float, currency: str = "MXN") -> str:
         if amount >= threshold * 0.99995:
             return f"{sign}${amount / threshold:,.1f}{suffix} {currency}"
     return f"{sign}${amount:,.0f} {currency}"
+
+
+def escape_markdown_dollars(text: str) -> str:
+    """Escape dollar signs so Streamlit does not read a pair of them as a formula."""
+    return text.replace("$", "\\$")
+
+
+def data_source_line(source: str, as_of: date, spot: float) -> str:
+    """One line with the data source, the date of the last observation and the last rate."""
+    label = DATA_SOURCE_LABELS.get(source, DATA_SOURCE_LABELS["unknown"])
+    return f"Data as of {as_of:%Y-%m-%d} | Last USD/MXN: {spot:.4f} | Source: {label}"
 
 
 def hedge_ratio(label: str) -> float:

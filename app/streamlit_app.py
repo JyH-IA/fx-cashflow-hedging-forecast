@@ -25,6 +25,8 @@ from fxhedge.dashboard import (
     base_only_notices,
     base_only_targets,
     comparison_table,
+    data_source_line,
+    escape_markdown_dollars,
     forecast_summary,
     format_compact_money,
     friendly_impact_table,
@@ -36,6 +38,7 @@ from fxhedge.dashboard import (
     summary_headline,
     summary_kpis,
 )
+from fxhedge.data_source import read_data_source
 from fxhedge.inference import Scenario, load_models, predict_forecast
 from fxhedge.io_utils import read_csv_with_date
 from fxhedge.model_training import ModelIntegrityError
@@ -45,15 +48,17 @@ DEFAULT_LEVEL = "Balanced (50%)"
 
 
 @st.cache_data(ttl=3600, show_spinner="Loading forecast...")
-def load_forecast(horizon: int, scenario: str, run_date: date) -> tuple[pd.DataFrame, float]:
-    """Forecast table and the last observed spot at ``run_date``."""
+def load_forecast(
+    horizon: int, scenario: str, run_date: date
+) -> tuple[pd.DataFrame, float, date]:
+    """Forecast table, the last observed spot at ``run_date`` and the date of that spot."""
     settings = load_settings()
     history = read_csv_with_date(settings.data_dir / "processed" / "master_features.csv")
     frame = predict_forecast(
         load_models(settings.models_dir), history, run_date, horizon, cast(Scenario, scenario)
     )
-    known = history.loc[history["date"] <= pd.Timestamp(run_date), "y_fx"]
-    return frame, float(known.iloc[-1])
+    last = history.loc[history["date"] <= pd.Timestamp(run_date)].iloc[-1]
+    return frame, float(last["y_fx"]), pd.Timestamp(last["date"]).date()
 
 
 @st.cache_data(ttl=3600)
@@ -233,7 +238,7 @@ def main() -> None:
         run_date = st.date_input("Run date", value=date.today())
 
     try:
-        frame, spot = load_forecast(horizon, scenario, run_date)
+        frame, spot, as_of = load_forecast(horizon, scenario, run_date)
     except (FileNotFoundError, ModelIntegrityError, ValueError) as exc:
         st.error(
             "The forecast is not available. Train the models first "
@@ -242,7 +247,15 @@ def main() -> None:
         st.caption(f"Reason: {type(exc).__name__}")
         st.stop()
 
-    business = load_yaml_model(load_settings().configs_dir / "business.yaml", BusinessConfig)
+    settings = load_settings()
+    source = read_data_source(settings.data_dir / "raw")
+    source_line = data_source_line(source, as_of, spot)
+    if source == "banxico":
+        st.caption(source_line)
+    else:
+        st.warning(source_line)
+
+    business = load_yaml_model(settings.configs_dir / "business.yaml", BusinessConfig)
     summary = forecast_summary(frame, spot)
     expected = summary["expected_cash_usd"]
     notional = float(
@@ -252,10 +265,11 @@ def main() -> None:
             max_value=max(expected * 2.0, 1.0),
             value=float(expected),
             step=notional_step(expected),
-            format="%.0f",
+            format="$%.0f",
             help="Starts at the USD income we expect over the planning horizon.",
         )
     )
+    st.sidebar.caption(escape_markdown_dollars(f"About {format_compact_money(notional, 'USD')}"))
     table = impact_table(frame, spot, notional, DEFAULT_RATIOS, business, horizon)
     kpis = summary_kpis(table, ratio)
 
@@ -264,7 +278,7 @@ def main() -> None:
     )
 
     with summary_tab:
-        st.subheader(summary_headline(kpis, horizon, ratio, notional))
+        st.subheader(escape_markdown_dollars(summary_headline(kpis, horizon, ratio, notional)))
         first, second, third, fourth = st.columns([2, 1, 1, 1])
         first.metric(
             "Downside protected in a bad case",
@@ -272,9 +286,12 @@ def main() -> None:
             help="How much the bad-case outcome improves compared with not hedging.",
         )
         second.metric(
-            "Swing in possible outcomes",
-            f"{kpis['narrowing_pct']:.0f}% narrower",
-            help="How much the gap between the bad and the good case shrinks.",
+            "Swing narrowed by",
+            f"{kpis['narrowing_pct']:.0f}%",
+            help=(
+                "How much the gap between the bad and the good case shrinks compared with "
+                "not hedging."
+            ),
         )
         third.metric("Bank cost of this hedge", format_compact_money(kpis["bank_cost"]))
         fourth.metric(
