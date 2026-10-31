@@ -1,0 +1,3 @@
+# Used by Streamlit Community Cloud. It installs the package and the dependencies of pyproject.toml.
+# Choose Python 3.12 (or 3.11) in Advanced settings when deploying: the project needs >=3.11,<3.13.
+.
