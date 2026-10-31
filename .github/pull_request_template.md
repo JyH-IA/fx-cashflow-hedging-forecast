@@ -8,4 +8,4 @@
 - [ ] `ruff check .` passes
 - [ ] No secrets, tokens, `.env` files or real company data are included
 - [ ] Data used in examples and tests is synthetic
-- [ ] Documentation and `CHANGELOG.md` updated when behaviour changes
+- [ ] Documentation updated when behaviour changes
