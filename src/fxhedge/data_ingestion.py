@@ -61,6 +61,11 @@ def _year_chunks(start: date, end: date) -> list[tuple[date, date]]:
     return chunks
 
 
+def default_end(today: date | None = None) -> date:
+    """Last day to ingest when ``--end`` is not given: yesterday, so its FIX is published."""
+    return (today or date.today()) - timedelta(days=1)
+
+
 def _get_json(
     session: requests.Session,
     url: str,
@@ -299,7 +304,11 @@ def _store_sales_in_db(settings: Settings, sales: pd.DataFrame) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Command-line entry point: simulate sales and, if possible, fetch macro data."""
+    """Command-line entry point: simulate sales and, if possible, fetch macro data.
+
+    The start date comes from ``configs/simulator.yaml``. The end date is ``--end`` or, when
+    it is not given, yesterday.
+    """
     parser = argparse.ArgumentParser(description="Ingest macro data and simulate sales.")
     parser.add_argument("--start", type=date.fromisoformat, default=None)
     parser.add_argument("--end", type=date.fromisoformat, default=None)
@@ -310,7 +319,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings = load_settings()
     sim_cfg = load_yaml_model(settings.configs_dir / "simulator.yaml", SimulatorConfig)
     start = args.start or sim_cfg.start
-    end = args.end or sim_cfg.end
+    end = args.end or default_end()
     raw_dir = settings.data_dir / "raw"
 
     sales = simulate_internal_sales(sim_cfg, start, end, settings.seed)

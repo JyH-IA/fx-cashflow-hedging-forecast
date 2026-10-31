@@ -56,7 +56,7 @@ The figures come from a local `make evaluate-full` run on 2026-10-31 with five r
 
 - **Cash-in.** The hybrid is the best model at every horizon, with 26 % to 31 % less error than the seasonal naive baseline. The validation gate rejected the residual tree, so the hybrid is Prophet alone. The internal data is synthetic and built with a seasonal pattern, so this shows that the method works when seasonality exists, not how a real business would perform.
 - **Exchange rate.** No model clearly beats the random walk. The seasonal naive (7 days) is 5 % to 8 % better and XGBoost 1 % to 5 % better, but five origins are too few to tell gaps this small from chance, and a weekly pattern is not expected in an exchange rate. SARIMA ties the random walk. The hybrid matches it exactly (ratio 1.000 with identical errors), which means the gate rejected the residual tree and its forecast is the last observed value.
-- **Real versus synthetic data.** On the synthetic series of `make demo` the exchange-rate hybrid trailed the random walk (1.56, 1.27 and 1.15) and the cash-in hybrid scored 0.49, 0.42 and 0.38. With real macro inputs and without `cancun_arrivals` the numbers above changed; the cause of each change was not isolated.
+- **Real versus synthetic data.** On the synthetic series of `make demo` the exchange-rate hybrid trailed the random walk (1.56, 1.27 and 1.15) and the cash-in hybrid scored 0.49, 0.42 and 0.38. With real macro inputs and without `cancun_arrivals` the numbers above changed; the cause of each change was not isolated. The sales simulator also re-drew its noise whenever the end date moved, which was fixed on 2026-10-31, so the figures above predate that fix and should be regenerated.
 
 What the iterations taught (measured on the synthetic series of `make demo`, before the switch to real data):
 
@@ -80,11 +80,10 @@ make app      # dashboard at http://127.0.0.1:8501
 1. Request a token for the [Banxico SIE API](https://www.banxico.org.mx/SieAPIRest/service/v1/token), copy `.env.example` to `.env` and set `BANXICO_TOKEN`. `.env` is git-ignored: never commit it.
 2. Keep `DB_URL` commented out in `.env` unless a PostgreSQL server is running (`make db-up`). With `DB_URL` set, `make ingest` also stores the simulated sales in that database and stops if it cannot connect.
 3. Download the effective federal funds rate (series `DFF`) from FRED as a CSV and save it as `data/external/fed_funds.csv`. The SECTUR file `data/external/sectur_arribos.csv` (columns `month`, `cancun_arrivals`) is optional: without it, `cancun_arrivals` is left out.
-4. Run the pipeline. `make ingest` stops at the end date of `configs/simulator.yaml`, so pass `--end` to bring the data up to date (it also extends the synthetic sales to that date):
+4. Run the pipeline. `make ingest` starts on the `start` date of `configs/simulator.yaml` (2020-01-01) and ends yesterday; pass `--end YYYY-MM-DD` to `python -m fxhedge.data_ingestion` to choose another end date. It also simulates the synthetic sales over the same dates:
 
 ```bash
-python -m fxhedge.data_ingestion --end 2026-10-30
-make features train evaluate-full hedge
+make ingest features train evaluate-full hedge
 make app
 ```
 

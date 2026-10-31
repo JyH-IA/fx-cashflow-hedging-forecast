@@ -16,6 +16,7 @@ from fxhedge.config import SeriesConfig, Settings
 from fxhedge.data_ingestion import (
     IngestionError,
     build_macro_dataset,
+    default_end,
     fetch_banxico_series,
     load_fed_funds_csv,
     load_sales,
@@ -183,6 +184,11 @@ def test_build_macro_dataset_joins_sources_and_fills_monthly_series(
 def test_build_macro_dataset_requires_a_token() -> None:
     with pytest.raises(IngestionError, match="BANXICO_TOKEN"):
         build_macro_dataset(Settings(_env_file=None), date(2024, 1, 1), date(2024, 1, 5))
+
+
+def test_default_end_is_yesterday() -> None:
+    assert default_end(date(2026, 10, 31)) == date(2026, 10, 30)
+    assert default_end(date(2026, 1, 1)) == date(2025, 12, 31)
 
 
 def test_load_sales_filters_the_sample_file(tmp_path: Path) -> None:

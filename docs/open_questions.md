@@ -11,12 +11,15 @@ Last reviewed on 2026-10-31. Items marked `TODO(verify)` in the code and configu
 - Series IDs: `SF43718` (FIX) and `SF60633` (28-day CETES) were checked against Banxico's documentation, and `DFF` against FRED. `SF43783`, used before for `cetes_28d`, is the 28-day TIIE and was replaced.
 - `SP1` (INPC) was checked against the published index: the downloaded data holds 145.462 for August 2026 and 146.075 for September 2026, the published values.
 - After the real-data training of 2026-10-31, `make explain` reported that the gate disabled the residual model for both targets, so there is nothing to explain with SHAP. An older `reports/shap_drivers.md` had listed drivers of a `y_fx` residual model from a previous run; run `make explain` after every `make train` to keep the file current.
+- The sales simulator draws the noise of each component from its own random stream, so extending the end date keeps the earlier days (`test_extending_the_end_date_keeps_the_earlier_days`). Before 2026-10-31, moving the end date re-drew the sales and cash-in noise of the whole history.
 
 ## Series and data still to check
 
+- The figures of the README and of the executive summary were produced before the simulator fix and with an end date set by hand. Run `make ingest features train evaluate-full hedge explain` again and refresh them.
 - SECTUR has no API assumed here: arrivals are a manual CSV download. The file was not provided in the real-data run, so `cancun_arrivals` is left out.
 - The interest rates in `configs/business.yaml` (6.22 % and 3.88 %) are illustrative inputs for the forward and must be updated by hand.
-- `make ingest` stops at the end date of `configs/simulator.yaml` and fails if `DB_URL` is set and the database is down. Making the database step optional, or failing softly, is not done.
+- `make ingest` ends yesterday unless `--end` is given, and it fails if `DB_URL` is set and the database is down. Making the database step optional, or failing softly, is not done.
+- The synthetic macro generator of `make sample` draws its series one after the other from a single random stream: the exchange-rate walk keeps its earlier days when the dates change, but the Yahoo Finance noise and the CETES series do not.
 - The internal data (sales, occupancy, cash-in) is synthetic, so the cash-in results do not describe a real business.
 
 ## Gate, base model and backtest
@@ -40,7 +43,7 @@ Last reviewed on 2026-10-31. Items marked `TODO(verify)` in the code and configu
 
 ## Tooling
 
-- CI runs Python 3.11 only. `requires-python` allows 3.12, which is the version used locally; a 3.11 and 3.12 matrix is not set up.
+- CI runs `typecheck` and `test` on Python 3.11 and 3.12 since 2026-10-31. The first results of the 3.12 jobs are still to be checked.
 - The drift report workflow (`monitoring.yml`) is manual and uses synthetic data.
 - The Docker `app` service does not mount `reports/`, so the reliability tab has no data in the container.
 - Docker base images are not pinned by digest.

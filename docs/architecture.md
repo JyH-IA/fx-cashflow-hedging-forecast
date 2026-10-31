@@ -2,7 +2,7 @@
 
 ## Data flow
 
-1. **Ingestion** (`data_ingestion`): Banxico SIE series and the Yahoo Finance close are downloaded with timeouts, retries and response validation. The Fed funds rate and, optionally, SECTUR arrivals are loaded from manual CSVs. Internal sales come from the simulator, optionally stored in a SQL database when `DB_URL` is set. `make sample` writes fully synthetic data instead. Both commands record the source in `data/raw/data_source.txt`.
+1. **Ingestion** (`data_ingestion`): Banxico SIE series and the Yahoo Finance close are downloaded with timeouts, retries and response validation. The Fed funds rate and, optionally, SECTUR arrivals are loaded from manual CSVs. Internal sales come from the simulator, optionally stored in a SQL database when `DB_URL` is set. The end date is yesterday unless `--end` is given. `make sample` writes fully synthetic data instead, up to the end date of `configs/simulator.yaml`. Both commands record the source in `data/raw/data_source.txt`.
 2. **Features** (`feature_engineering`): inner join by date, forward fill for non-banking days, lags and rolling statistics on shifted series, and calendar flags (weekday, Mexican holidays, high season, hurricane season). Exogenous columns that are entirely empty are dropped with a warning. The source marker is copied to `data/processed/`.
 3. **Training** (`model_training`): each hybrid has a base forecast (Prophet for cash-in, the last observed value for the exchange rate) plus a LightGBM model, tuned with Optuna, that learns the out-of-sample residuals of the base. A validation gate keeps the LightGBM part only if it lowers the error on the most recent residuals, scored with exogenous variables frozen at the forecast origin. XGBoost predicts the level directly and acts as a comparator.
 4. **Evaluation** (`evaluation`, `hedging_backtest`): rolling-origin backtests against baselines, then a historical simulation of hedging strategies.
@@ -16,7 +16,7 @@
 | `config` | Environment settings (`SecretStr`) and validated YAML models |
 | `schemas` | Data contracts and `validate_frame` |
 | `db` | Parameterized SQL access with SQLAlchemy |
-| `simulator`, `sample_data` | Synthetic sales and fully synthetic macro data |
+| `simulator`, `sample_data` | Synthetic sales (one random stream per noise component) and fully synthetic macro data |
 | `data_source` | Marker file that records whether the raw data is synthetic or from Banxico |
 | `finance` | Forward pricing and hedge proceeds |
 | `dashboard` | Pure helpers behind the Streamlit app: headline, key figures, labels and the data source line |

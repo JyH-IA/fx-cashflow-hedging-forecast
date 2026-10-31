@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
 import pytest
 
 from fxhedge.config import SimulatorConfig
@@ -19,6 +20,12 @@ def test_same_seed_gives_identical_data_and_other_seed_differs() -> None:
     other = simulate_internal_sales(CFG, CFG.start, CFG.end, seed=2)
     assert first.equals(again)
     assert not first.equals(other)
+
+
+def test_extending_the_end_date_keeps_the_earlier_days() -> None:
+    short = simulate_internal_sales(CFG, CFG.start, date(2024, 12, 31), seed=1)
+    longer = simulate_internal_sales(CFG, CFG.start, CFG.end, seed=1)
+    pd.testing.assert_frame_equal(longer.iloc[: len(short)].reset_index(drop=True), short)
 
 
 def test_output_satisfies_the_sales_contract() -> None:

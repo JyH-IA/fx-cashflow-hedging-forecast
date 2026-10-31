@@ -1,3 +1,5 @@
+# start: first day of the synthetic sales and of the real macro series.
+# end: used only by make sample and make demo; make ingest ends yesterday unless --end is given.
 start: 2020-01-01
 end: 2026-09-30
 base_daily_sales_usd: 250000.0
